@@ -1,0 +1,1844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cedar Fire — Air Attack 230</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Palette taken from the subject: OV-10 cockpit panel grey, placard white,
+   avionics amber for transmit, receive-lamp blue, CAL FIRE / retardant red. */
+:root{
+  --panel:#272B27; --panel-hi:#30352F; --panel-lo:#1F221F; --rule:#3D433B;
+  --placard:#ECE7DA; --muted:#A9AB9F; --dim:#7F8378;
+  --amber:#F2A93B; --rx:#9BCBDD; --red:#D2263C; --ok:#9ACD7E;
+  --side:300px; --bar:100px;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --panel:#272B27; --panel-hi:#30352F; --panel-lo:#1F221F; --rule:#3D433B;
+    --placard:#ECE7DA; --muted:#A9AB9F; --dim:#7F8378;
+  }
+}
+:root[data-theme="dark"]{
+  --panel:#272B27; --panel-hi:#30352F; --panel-lo:#1F221F; --rule:#3D433B;
+  --placard:#ECE7DA; --muted:#A9AB9F; --dim:#7F8378;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px);}
+*,*::before,*::after{box-sizing:inherit;}
+html,body{height:100%;margin:0;overflow:hidden;background:#151715;color:var(--placard);
+  font-family:'Barlow','Helvetica Neue',Arial,sans-serif;font-size:14px;}
+button{font:inherit;color:inherit;}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px;}
+
+/* ── 3D VIEW ─────────────────────────────────────────── */
+#app{position:fixed;left:0;top:0;right:var(--side);bottom:var(--bar);overflow:hidden;background:#8d9aa3;}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block;}
+#labels{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
+#frame{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
+
+.lbl{position:absolute;transform:translate(-50%,-100%);white-space:nowrap;pointer-events:none;
+  font-family:'Barlow Condensed','Arial Narrow',sans-serif;}
+.lbl-ac{font-size:13px;font-weight:600;letter-spacing:.3px;padding:1px 6px 2px;border-radius:2px;
+  background:rgba(20,22,20,.62);border-left:2px solid currentColor;}
+.lbl-ac small{font-weight:500;opacity:.8;margin-left:5px;font-size:11px;color:var(--placard);}
+.lbl-ac::after{content:"";position:absolute;left:50%;top:100%;width:1px;height:14px;background:currentColor;opacity:.55;}
+.lbl-gnd{font-size:12px;font-weight:500;color:#F3EEDF;text-shadow:0 1px 2px rgba(0,0,0,.9),0 0 6px rgba(0,0,0,.6);transform:translate(-50%,-50%);}
+.lbl-anat{font-size:12px;font-weight:700;letter-spacing:.6px;color:#FFD7A0;
+  text-shadow:0 1px 3px rgba(0,0,0,.95);transform:translate(-50%,-50%);}
+
+#hdgTape{position:absolute;top:calc(10px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);
+  display:flex;align-items:baseline;gap:8px;padding:4px 12px;border-radius:3px;
+  background:rgba(24,26,24,.72);font-family:'Barlow Condensed',sans-serif;pointer-events:none;}
+#hdgTape b{font-size:20px;font-weight:600;letter-spacing:1px;font-variant-numeric:tabular-nums;}
+#hdgTape span{font-size:12px;color:var(--muted);}
+
+#nextStep{display:none;position:absolute;top:calc(48px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);
+  max-width:min(92%,640px);padding:4px 12px;border-radius:3px;background:rgba(24,26,24,.7);
+  font-family:'Barlow Condensed',sans-serif;font-size:14px;color:var(--amber);text-align:center;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;}
+
+#prompt{position:absolute;top:calc(84px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);
+  width:min(92%,460px);padding:9px 13px 10px;border-radius:3px;background:rgba(31,34,31,.94);
+  border-left:3px solid var(--amber);display:none;pointer-events:none;}
+#prompt.show{display:block;}
+#pFrom{font-family:'Barlow Condensed',sans-serif;font-size:13px;color:var(--amber);margin-bottom:3px;}
+#pMsg{font-size:14px;line-height:1.45;white-space:pre-line;}
+
+#legBanner{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);padding:9px 22px;border-radius:3px;
+  font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:600;letter-spacing:.5px;
+  color:#fff;display:none;pointer-events:none;box-shadow:0 8px 30px rgba(0,0,0,.45);}
+
+#blindBar{position:absolute;left:12px;bottom:12px;display:none;align-items:center;gap:14px;
+  padding:8px 12px;border-radius:3px;background:rgba(31,34,31,.92);}
+#blindBar.show{display:flex;}
+.bgrp{display:flex;align-items:center;gap:5px;font-family:'Barlow Condensed',sans-serif;font-size:13px;color:var(--muted);}
+.bdot{width:9px;height:9px;border-radius:50%;border:1px solid var(--dim);}
+.bdot.on{background:var(--ok);border-color:var(--ok);}
+#skipBtn{border:0;border-radius:3px;background:var(--amber);color:#1b1b1b;font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;font-size:14px;padding:6px 12px;cursor:pointer;}
+
+/* ── SIDE PANEL ──────────────────────────────────────── */
+#side{position:fixed;top:0;right:0;bottom:0;width:var(--side);display:flex;flex-direction:column;
+  background:var(--panel);border-left:1px solid var(--rule);
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);}
+.inc{padding:12px 14px 10px;border-bottom:1px solid var(--rule);}
+.inc h1{margin:0 0 8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:24px;letter-spacing:.4px;line-height:1;}
+.inc h1 small{font-size:13px;font-weight:500;color:var(--muted);margin-left:8px;letter-spacing:0;}
+.gauges{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;}
+.g{background:var(--panel-lo);border-radius:2px;padding:4px 6px;}
+.g b{display:block;font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1;}
+.g span{font-size:11px;color:var(--muted);}
+.g.warn b{color:var(--amber);}
+#log{flex:1;overflow-y:auto;padding:6px 12px;font-size:13px;line-height:1.4;scrollbar-width:thin;scrollbar-color:var(--rule) transparent;}
+.le{padding:4px 0;border-bottom:1px solid rgba(61,67,59,.55);}
+.le .cs{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:13px;margin-right:5px;}
+.le .tm{font-size:11px;color:var(--dim);float:right;font-variant-numeric:tabular-nums;}
+.le.me .cs{color:var(--amber);} .le.me .m{color:#F6DCAE;}
+.le.rx .cs{color:#F08A5D;} .le.heli .cs{color:var(--rx);}
+.le.dsp .cs{color:#C9B6E8;} .le.gnd .cs{color:#E9867A;}
+.le.sys{color:var(--muted);font-size:12px;font-style:italic;}
+.le.sys .cs{display:none;}
+.sect{border-top:1px solid var(--rule);padding:8px 12px;}
+.sect h2{margin:0 0 6px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;color:var(--muted);letter-spacing:.3px;}
+.acrow{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:13px;}
+.acrow b{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:14px;}
+.acst{font-family:'Barlow Condensed',sans-serif;font-size:12px;padding:1px 6px;border-radius:2px;background:var(--panel-lo);color:var(--muted);}
+.acst.hot{color:#1b1b1b;background:var(--amber);}
+.acst.drop{color:#fff;background:var(--red);}
+.acst.on{color:#1b1b1b;background:var(--rx);}
+#procs{display:grid;gap:2px;font-size:12.5px;}
+.pi{display:flex;gap:7px;color:var(--placard);}
+.pi i{font-style:normal;color:var(--dim);width:12px;}
+.pi.done{color:var(--dim);} .pi.done i{color:var(--ok);}
+#logToggle{display:none;}
+
+/* ── RADIO BAR ───────────────────────────────────────── */
+#bar{position:fixed;left:0;right:var(--side);bottom:0;height:var(--bar);background:var(--panel);
+  border-top:1px solid var(--rule);display:flex;flex-direction:column;gap:6px;padding:8px 10px;
+  padding-bottom:calc(8px + env(safe-area-inset-bottom,0px));}
+#keys{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;flex:1;}
+.key{position:relative;border:1px solid var(--rule);border-radius:3px;background:var(--panel-hi);cursor:pointer;
+  font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:600;letter-spacing:.2px;
+  display:flex;align-items:center;justify-content:center;gap:7px;padding:0 6px;
+  user-select:none;-webkit-user-select:none;touch-action:none;min-height:38px;}
+.key:hover{background:#383e37;}
+.key .lamp{width:8px;height:8px;border-radius:50%;background:#454b43;flex:none;}
+.key.sel{border-color:#6c7468;}
+.key.rx .lamp{background:var(--rx);box-shadow:0 0 8px var(--rx);}
+.key.tx{background:var(--amber);color:#1b1b1b;border-color:var(--amber);}
+.key.tx .lamp{background:#7a1b10;box-shadow:none;}
+#txRow{display:flex;align-items:center;gap:8px;min-height:30px;}
+#micDot{width:9px;height:9px;border-radius:50%;background:var(--dim);flex:none;}
+#micDot.ok{background:var(--ok);} #micDot.live{background:var(--red);box-shadow:0 0 8px var(--red);}
+#heard{flex:1;min-width:0;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#heard.live{color:var(--placard);}
+#typed{flex:0 1 300px;min-width:120px;background:var(--panel-lo);border:1px solid var(--rule);border-radius:3px;
+  color:var(--placard);padding:6px 9px;font-size:13px;}
+#typed::placeholder{color:var(--dim);}
+#typed.pending{border-color:var(--amber);background:#3a3221;color:#FFE7BD;}
+#sendBtn{display:none;border:0;border-radius:3px;background:var(--amber);color:#1b1b1b;cursor:pointer;
+  font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;padding:5px 12px;white-space:nowrap;}
+#sendBtn.show{display:block;}
+#dictCard{position:absolute;left:12px;right:12px;bottom:70px;max-width:520px;display:none;padding:12px 14px;border-radius:3px;
+  background:rgba(31,34,31,.96);border-left:3px solid var(--rx);font-size:13.5px;line-height:1.5;z-index:5;}
+#dictCard.show{display:block;}
+#dictCard b{font-family:'Barlow Condensed',sans-serif;font-size:16px;display:block;margin-bottom:3px;}
+#dictCard kbd{font-family:inherit;background:var(--panel-lo);border:1px solid var(--rule);border-radius:3px;padding:0 5px;}
+#dictCard button{margin-top:8px;}
+.tbtn{border:1px solid var(--rule);background:transparent;border-radius:3px;padding:5px 9px;cursor:pointer;
+  font-family:'Barlow Condensed',sans-serif;font-size:13px;color:var(--muted);white-space:nowrap;}
+.tbtn:hover{color:var(--placard);border-color:#5b6257;}
+.tbtn[aria-pressed="true"]{color:var(--placard);border-color:var(--amber);}
+
+/* ── MODALS ──────────────────────────────────────────── */
+.modal{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;
+  background:rgba(12,13,12,.55);padding:20px;}
+.modal.show{display:flex;}
+.card{width:min(620px,100%);max-height:86vh;overflow:auto;background:var(--panel);border-radius:4px;
+  border-top:3px solid var(--amber);padding:22px 24px;box-shadow:0 20px 60px rgba(0,0,0,.5);}
+.card h2{margin:0 0 4px;font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:700;}
+.card .lead{color:var(--muted);margin:0 0 14px;line-height:1.5;}
+.ci{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--rule);line-height:1.45;}
+.ci i{font-style:normal;width:16px;flex:none;}
+.ci.pass i{color:var(--ok);} .ci.fail i{color:var(--amber);}
+.ci b{display:block;font-weight:500;}
+.ci em{display:block;font-style:normal;font-size:12.5px;color:var(--muted);}
+.model{background:var(--panel-lo);border-left:2px solid var(--ok);padding:8px 11px;margin:6px 0 12px;font-size:13.5px;line-height:1.5;}
+.mlabel{font-family:'Barlow Condensed',sans-serif;color:var(--muted);font-size:13px;margin-top:14px;}
+.cta{margin-top:16px;border:0;border-radius:3px;background:var(--amber);color:#1b1b1b;font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;font-size:17px;padding:10px 22px;cursor:pointer;}
+.row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--rule);}
+.row b{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;}
+.ledger{font-size:12.5px;color:var(--muted);margin-top:10px;max-height:180px;overflow:auto;}
+.ledger div{display:flex;justify-content:space-between;padding:2px 0;}
+.ledger .p{color:var(--ok);} .ledger .n{color:var(--amber);}
+
+#intro{background:linear-gradient(90deg,rgba(14,15,14,.86) 0%,rgba(14,15,14,.66) 46%,rgba(14,15,14,0) 78%);
+  justify-content:flex-start;align-items:stretch;padding:0;}
+#intro .inner{max-width:520px;padding:clamp(28px,7vh,80px) clamp(22px,5vw,64px);display:flex;flex-direction:column;justify-content:center;}
+#intro h1{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:clamp(64px,11vw,128px);line-height:.86;margin:0;letter-spacing:-1px;}
+#intro .who{font-family:'Barlow Condensed',sans-serif;font-size:20px;color:var(--amber);margin:14px 0 18px;}
+#intro p{line-height:1.55;color:#DAD5C8;margin:0 0 10px;max-width:46ch;}
+#intro .note{font-size:12.5px;color:var(--muted);margin-top:16px;}
+#loadMsg{font-size:13px;color:var(--muted);margin-top:10px;min-height:1em;}
+
+@media (max-width:860px){
+  :root{--side:0px;--bar:132px;}
+  #side{width:min(330px,88vw);transform:translateX(100%);transition:transform .2s;z-index:40;}
+  #side.open{transform:none;}
+  #logToggle{display:block;position:fixed;top:calc(10px + env(safe-area-inset-top,0px));right:10px;z-index:41;}
+  #keys{grid-template-columns:repeat(4,minmax(0,1fr));}
+  #typed{flex-basis:160px;}
+  #hdgTape{left:12px;transform:none;}
+}
+@media (prefers-reduced-motion:reduce){ #side{transition:none;} }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="gl"></canvas>
+  <svg id="frame" viewBox="0 0 1000 600" preserveAspectRatio="none" aria-hidden="true">
+    <defs>
+      <linearGradient id="glare" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#fff" stop-opacity=".07"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <rect x="0" y="0" width="1000" height="600" fill="url(#glare)"/>
+    <path d="M0,0 L34,0 Q18,300 52,600 L0,600 Z" fill="#1d201d" opacity=".9"/>
+    <path d="M34,0 Q18,300 52,600" stroke="#3a3f38" stroke-width="2" fill="none"/>
+    <path d="M0,0 L1000,0 L1000,9 Q500,26 0,9 Z" fill="#1d201d" opacity=".85"/>
+  </svg>
+  <div id="labels"></div>
+  <div id="hdgTape"><b id="hdgV">000</b><span>right orbit</span></div>
+  <div id="nextStep"></div>
+  <div id="prompt"><div id="pFrom"></div><div id="pMsg"></div></div>
+  <div id="legBanner"></div>
+  <div id="dictCard" role="status">
+    <b>Talk through your computer's dictation</b>
+    <span id="dictWhy">This page can't open the microphone here.</span> Press a radio key to pick the frequency,
+    then <span id="dictHow">use your system dictation</span> and speak your call into the box. Check it, then press <kbd>Enter</kbd> to transmit.
+    <div><button class="tbtn" id="dictOk" type="button">Got it</button> <button class="tbtn" id="dictRetry" type="button">Ask for the mic again</button></div>
+  </div>
+  <div id="blindBar">
+    <div class="bgrp">Air Tac <span class="bdot" id="bd1"></span><span class="bdot" id="bd2"></span></div>
+    <div class="bgrp">122.925 <span class="bdot" id="bd3"></span><span class="bdot" id="bd4"></span></div>
+    <div class="bgrp">Rotor Victor <span class="bdot" id="bd5"></span><span class="bdot" id="bd6"></span></div>
+    <button id="skipBtn" type="button">Skip blind calls</button>
+  </div>
+</div>
+
+<button id="logToggle" class="tbtn" type="button">Radio log</button>
+<aside id="side">
+  <div class="inc">
+    <h1>Cedar Fire<small id="incType">Type 3</small></h1>
+    <div class="gauges">
+      <div class="g" id="gAc"><b id="vAc">10</b><span>acres</span></div>
+      <div class="g"><b id="vCt">0%</b><span>contained</span></div>
+      <div class="g" id="gWind"><b id="vWd">SW 12</b><span>wind mph</span></div>
+      <div class="g"><b id="vSc">0</b><span>score</span></div>
+    </div>
+  </div>
+  <div id="log" aria-live="polite"></div>
+  <div class="sect"><h2>Aircraft</h2><div id="acList"></div></div>
+  <div class="sect"><h2>Checklist</h2><div id="procs"></div></div>
+</aside>
+
+<footer id="bar">
+  <div id="keys">
+    <button class="key sel" data-f="tac" type="button"><span class="lamp"></span>Air Tac 4</button>
+    <button class="key" data-f="vhf" type="button"><span class="lamp"></span>122.925</button>
+    <button class="key" data-f="rv" type="button"><span class="lamp"></span>Rotor Victor</button>
+    <button class="key" data-f="neu" type="button"><span class="lamp"></span>NEU West</button>
+    <button class="key" data-f="cdf" type="button"><span class="lamp"></span>A/G 3</button>
+    <button class="key" data-f="tac2" type="button"><span class="lamp"></span>Tac 2</button>
+    <button class="key" data-f="guard" type="button"><span class="lamp"></span>Guard</button>
+  </div>
+  <div id="txRow">
+    <span id="micDot" title="Microphone"></span>
+    <button class="tbtn" id="micBtn" type="button" style="display:none;border-color:var(--rx);color:var(--placard)">Enable mic</button>
+    <div id="heard">Hold a key to talk. Space keys Air Tac.</div>
+    <input id="typed" type="text" autocomplete="off" spellcheck="false" placeholder="Or type a call and press Enter">
+    <button id="sendBtn" type="button">Send ↵</button>
+    <button class="tbtn" id="reviewBtn" type="button" aria-pressed="true" title="Check each transcript before it goes out">Review</button>
+    <button class="tbtn" id="hintBtn" type="button" aria-pressed="true">Hints</button>
+    <button class="tbtn" id="addBtn" type="button">Order aircraft</button>
+  </div>
+</footer>
+
+<div class="modal show" id="intro">
+  <div class="inner">
+    <h1>Cedar Fire</h1>
+    <div class="who">Air Attack 230, back seat of the OV-10</div>
+    <p>A timber understory fire is running upslope off Ridgeline Road with homes on the north side. Tankers 88 and 89 and Copter 5 Bravo Tango are on the order.</p>
+    <p>Make your 12- and 7-mile blind calls on Air Tac, 122.925 and Rotor Victor. Then work the aircraft: clear them in, brief the drop, clear them to maneuver and drop.</p>
+    <div><button class="cta" id="launchBtn" type="button" disabled>Loading terrain…</button></div>
+    <div id="loadMsg"></div>
+    <div class="note">Hold a radio key and speak, release, then press Enter to send what was heard. If the microphone is blocked, dictate into the call box with your computer's voice typing instead.</div>
+  </div>
+</div>
+
+<div class="modal" id="crit">
+  <div class="card">
+    <h2>Blind call critique</h2>
+    <p class="lead">How your six calls measured up against the standard format.</p>
+    <div id="critBody"></div>
+    <button class="cta" id="critBtn" type="button">Begin operations</button>
+  </div>
+</div>
+
+<div class="modal" id="summary">
+  <div class="card">
+    <h2 id="sumTitle">Exercise complete</h2>
+    <p class="lead" id="sumLead"></p>
+    <div id="sumBody"></div>
+    <button class="cta" id="sumBtn" type="button">Close</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
+// ════════════════════════════════════════════════════════════════════
+//  UTILITIES
+// ════════════════════════════════════════════════════════════════════
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const smooth=t=>t*t*(3-2*t);
+const TAU=Math.PI*2;
+function angDiff(a,b){let d=a-b;while(d>Math.PI)d-=TAU;while(d<-Math.PI)d+=TAU;return d;}
+function hash2(x,z){let h=(Math.imul(x|0,374761393)+Math.imul(z|0,668265263))|0;
+  h=Math.imul(h^(h>>>13),1274126177);h^=h>>>16;return (h>>>0)/4294967296;}
+function vnoise(x,z){const xi=Math.floor(x),zi=Math.floor(z),xf=x-xi,zf=z-zi;
+  const u=xf*xf*(3-2*xf),v=zf*zf*(3-2*zf);
+  const a=hash2(xi,zi),b=hash2(xi+1,zi),c=hash2(xi,zi+1),d=hash2(xi+1,zi+1);
+  return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v;}
+function fbm(x,z,oct){let s=0,a=.5,f=1,n=0;
+  for(let i=0;i<oct;i++){s+=a*vnoise(x*f+i*17.3,z*f-i*9.1);n+=a;f*=2.02;a*=.5;}return s/n;}
+let rngSeed=91;function rnd(){rngSeed=(rngSeed*1664525+1013904223)>>>0;return rngSeed/4294967296;}
+
+// Compass (0=N, 90=E) <-> world. World: +x east, +z south, +y up.
+function compassToTheta(c){const r=c*Math.PI/180;return Math.atan2(-Math.cos(r),Math.sin(r));}
+function thetaToCompass(t){return ((Math.atan2(Math.cos(t),-Math.sin(t))*180/Math.PI)+360)%360;}
+function dirName(c){return ['north','northeast','east','southeast','south','southwest','west','northwest'][Math.round(((c%360)+360)%360/45)%8];}
+function dirAbbr(c){return ['N','NE','E','SE','S','SW','W','NW'][Math.round(((c%360)+360)%360/45)%8];}
+
+// ════════════════════════════════════════════════════════════════════
+//  GEOGRAPHY — one coherent place, used by every system
+//  Fire on a midslope; head runs NE upslope; homes on Ridgeline Rd to the
+//  north (threatened from the left flank); E-2362 staged west on the road;
+//  Pilgrim Pond to the southwest, away from the head, for bucket work.
+// ════════════════════════════════════════════════════════════════════
+const WORLD={size:12000,seg:256,nocomR:3000,icomR:4800,holdR:3700,spawnR:6300,
+  aaR:1150,aaAGL:700,orbitPeriod:58};
+const POND={x:-1150,z:660,r:165};
+const ROAD=[[-6000,-300],[-3000,-420],[-1400,-520],[-600,-475],[-100,-488],[500,-520],[1300,-700],[2600,-1100],[6000,-1600]];
+const HOUSES=[{x:-185,z:-426,rot:.03},{x:-105,z:-429,rot:-.04},{x:-25,z:-433,rot:.05}];
+const ENGINE={x:-560,z:-478,rot:-.05};
+let POND_H=0, FIRE_H=0;
+
+function rawH(x,z){
+  const n=fbm(x/2900+11.3,z/2900+4.7,5);
+  const r=1-Math.abs(fbm(x/1800+3.1,z/1800+9.2,4)*2-1);
+  return n*620+r*r*240+(x-z)*0.032;      // regional tilt: uphill to the NE
+}
+function roadDist(x,z){
+  let best=1e9;
+  for(let i=0;i<ROAD.length-1;i++){
+    const [ax,az]=ROAD[i],[bx,bz]=ROAD[i+1];
+    const vx=bx-ax,vz=bz-az,t=clamp(((x-ax)*vx+(z-az)*vz)/(vx*vx+vz*vz),0,1);
+    const d=Math.hypot(x-(ax+vx*t),z-(az+vz*t)); if(d<best)best=d;
+  }
+  return best;
+}
+function hAt(x,z){
+  let h=rawH(x,z);
+  const pd=Math.hypot(x-POND.x,z-POND.z);
+  if(pd<POND.r*2.4){const t=smooth(clamp((pd-POND.r*.85)/(POND.r*1.5),0,1));h=lerp(POND_H-5,h,t);}
+  return h;
+}
+
+// Ground colour, shared by the wide terrain texture and the hi-res fire zone
+// so the two blend without a seam.
+function groundColor(x,z){
+  const h=hAt(x,z), e=18;
+  const sl=Math.hypot(hAt(x+e,z)-hAt(x-e,z),hAt(x,z+e)-hAt(x,z-e))/(2*e);
+  const fuel=fbm(x/950+40,z/950-12,4), patch=fbm(x/240+7,z/240+3,3), fine=vnoise(x/38,z/38);
+  let r,g,b;
+  if(h>780||sl>.72){                               // rock and scree on the steep/high ground
+    const k=.8+patch*.25; r=112*k;g=106*k;b=93*k;
+  } else if(fuel<.34&&sl<.22){                     // dry grass flats
+    const k=.84+patch*.22; r=150*k;g=133*k;b=84*k;
+  } else if(fuel<.42){                             // open understory / brush transition
+    const k=.8+patch*.28; r=90*k;g=94*k;b=56*k;
+  } else {                                         // timber floor: duff and needle cast
+    const k=.7+patch*.3; r=60*k;g=70*k;b=42*k;
+  }
+  const f=.9+fine*.2;
+  return [clamp(r*f,0,255),clamp(g*f,0,255),clamp(b*f,0,255)];
+}
+function isTimber(x,z){
+  const h=hAt(x,z);if(h>770)return 0;
+  const fuel=fbm(x/950+40,z/950-12,4);
+  return clamp((fuel-.37)/.16,0,1);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  THREE.JS SCENE
+// ════════════════════════════════════════════════════════════════════
+let renderer,scene,camera,clock,sun,hemi,fireLight,skyMat;
+let terrainMesh,treeMesh,treeData=[],nearTrees=[],ovCanvas,ovCtx,ovBase,ovTex,ovMesh;
+const houseObjs=[];
+const OV={size:2600,half:1300,res:1024};
+
+function makeCanvas(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return c;}
+
+function initRenderer(){
+  const cv=$('gl');
+  renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true,powerPreference:'high-performance'});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.75));
+  scene=new THREE.Scene();
+  scene.fog=new THREE.Fog(0xb9b3a2,2600,11000);
+  camera=new THREE.PerspectiveCamera(42,1,8,40000);
+  clock=new THREE.Clock();
+  hemi=new THREE.HemisphereLight(0xc4d2de,0x3e3524,.52); scene.add(hemi);
+  sun=new THREE.DirectionalLight(0xffeccc,.72); sun.position.set(-3000,5200,2400); scene.add(sun);
+  fireLight=new THREE.PointLight(0xff7a2a,1.4,1900,1.6); scene.add(fireLight);
+  buildSky();
+  onResize();
+}
+function onResize(){
+  if(!renderer)return;
+  const el=$('app'), w=el.clientWidth||1, h=el.clientHeight||1;
+  renderer.setSize(w,h,false);
+  camera.aspect=w/h; camera.fov=w/h<1?64:w/h<1.3?52:42; camera.updateProjectionMatrix();
+  const scale=h/(2*Math.tan(camera.fov*Math.PI/360));
+  PS.forEach(p=>{p.mat.uniforms.scale.value=scale*renderer.getPixelRatio();});
+}
+
+function buildSky(){
+  skyMat=new THREE.ShaderMaterial({
+    side:THREE.BackSide,depthWrite:false,fog:false,
+    uniforms:{top:{value:new THREE.Color(0x6e8fae)},horizon:{value:new THREE.Color(0xd9cdb2)},smoke:{value:0}},
+    vertexShader:'varying vec3 vP;void main(){vP=normalize(position);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
+    fragmentShader:'uniform vec3 top;uniform vec3 horizon;uniform float smoke;varying vec3 vP;'+
+      'void main(){float t=clamp(vP.y*1.6,0.0,1.0);vec3 c=mix(horizon,top,pow(t,0.65));'+
+      'c=mix(c,vec3(0.58,0.47,0.36),smoke*(1.0-t*0.6));gl_FragColor=vec4(c,1.0);}'
+  });
+  const sky=new THREE.Mesh(new THREE.SphereGeometry(30000,32,16),skyMat);
+  sky.renderOrder=-1; scene.add(sky);
+}
+
+function buildTerrain(){
+  // Ground texture: colour field computed at 512 and upsampled, then roads,
+  // pond and clearings drawn crisply at full resolution.
+  const N=512,c0=makeCanvas(N,N),g0=c0.getContext('2d'),img=g0.createImageData(N,N);
+  for(let py=0;py<N;py++)for(let px=0;px<N;px++){
+    const x=-6000+(px+.5)/N*12000,z=-6000+(py+.5)/N*12000,c=groundColor(x,z),i=(py*N+px)*4;
+    img.data[i]=c[0];img.data[i+1]=c[1];img.data[i+2]=c[2];img.data[i+3]=255;
+  }
+  g0.putImageData(img,0,0);
+  const T=2048,tc=makeCanvas(T,T),g=tc.getContext('2d');
+  g.imageSmoothingEnabled=true;g.drawImage(c0,0,0,T,T);
+  const k=T/12000,w2t=(x,z)=>[(x+6000)*k,(z+6000)*k];
+  for(let i=0;i<26000;i++){                       // fine grain so it isn't a smear up close
+    const x=rnd()*T,y=rnd()*T,v=rnd();
+    g.fillStyle=v<.5?'rgba(20,24,14,.18)':'rgba(220,210,170,.10)';g.fillRect(x,y,2,2);
+  }
+  drawRoadAndFeatures(g,w2t,k);
+  const tex=new THREE.CanvasTexture(tc);
+  tex.anisotropy=renderer.capabilities.getMaxAnisotropy();
+  const geo=new THREE.PlaneGeometry(WORLD.size,WORLD.size,WORLD.seg,WORLD.seg);
+  geo.rotateX(-Math.PI/2);
+  const p=geo.attributes.position;
+  for(let i=0;i<p.count;i++)p.setY(i,hAt(p.getX(i),p.getZ(i)));
+  geo.computeVertexNormals();
+  terrainMesh=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({map:tex}));
+  scene.add(terrainMesh);
+  // pond surface
+  const water=new THREE.Mesh(new THREE.CircleGeometry(POND.r,48),
+    new THREE.MeshPhongMaterial({color:0x2d5a72,shininess:80,specular:0x9fc4d6}));
+  water.rotation.x=-Math.PI/2; water.position.set(POND.x,POND_H+1.5,POND.z); scene.add(water);
+}
+function drawRoadAndFeatures(g,w2t,k){
+  g.lineCap='round';g.lineJoin='round';
+  const road=()=>{g.beginPath();ROAD.forEach(([x,z],i)=>{const [a,b]=w2t(x,z);i?g.lineTo(a,b):g.moveTo(a,b);});};
+  road();g.strokeStyle='rgba(60,52,38,.9)';g.lineWidth=Math.max(3,24*k);g.stroke();
+  road();g.strokeStyle='rgba(196,180,140,1)';g.lineWidth=Math.max(2,15*k);g.stroke();
+  // house clearings + driveways
+  HOUSES.forEach(hs=>{
+    const [a,b]=w2t(hs.x,hs.z);
+    g.fillStyle='rgba(150,138,96,.95)';g.beginPath();g.ellipse(a,b,46*k,38*k,0,0,TAU);g.fill();
+    g.strokeStyle='rgba(190,175,135,1)';g.lineWidth=Math.max(1.5,6*k);
+    const [c,d]=w2t(hs.x,hs.z-58);g.beginPath();g.moveTo(a,b);g.lineTo(c,d);g.stroke();
+  });
+  const [pa,pb]=w2t(POND.x,POND.z);
+  g.fillStyle='rgba(120,110,80,1)';g.beginPath();g.arc(pa,pb,(POND.r+22)*k,0,TAU);g.fill();
+  g.fillStyle='#2d5a72';g.beginPath();g.arc(pa,pb,POND.r*k,0,TAU);g.fill();
+}
+
+function buildTrees(){
+  // Individual conifers as instanced cones: thousands of real 3D crowns.
+  const cand=[];
+  for(let i=0;i<70000&&cand.length<12500;i++){
+    const ang=rnd()*TAU,rad=Math.sqrt(rnd())*5600;
+    const x=Math.cos(ang)*rad,z=Math.sin(ang)*rad,t=isTimber(x,z);
+    if(rnd()>t*0.92)continue;
+    if(roadDist(x,z)<34)continue;
+    if(Math.hypot(x-POND.x,z-POND.z)<POND.r+55)continue;
+    if(HOUSES.some(hs=>Math.hypot(x-hs.x,z-hs.z)<70))continue;
+    cand.push([x,z]);
+  }
+  const geo=new THREE.ConeGeometry(1,1,7,1);geo.translate(0,.5,0);
+  const mat=new THREE.MeshLambertMaterial({color:0xffffff});
+  treeMesh=new THREE.InstancedMesh(geo,mat,cand.length);
+  const m=new THREE.Matrix4(),q=new THREE.Quaternion(),sc=new THREE.Vector3(),ps=new THREE.Vector3(),col=new THREE.Color();
+  cand.forEach(([x,z],i)=>{
+    const hgt=22+rnd()*20,rad=hgt*(.26+rnd()*.08);
+    ps.set(x,hAt(x,z)-1,z);sc.set(rad,hgt,rad);m.compose(ps,q,sc);treeMesh.setMatrixAt(i,m);
+    const v=rnd(),base=v<.82?[.17+v*.05,.29+v*.06,.16]:[.30,.36,.19];
+    col.setRGB(base[0],base[1],base[2]);treeMesh.setColorAt(i,col);
+    treeData.push({x,z,h:hgt,r:rad,state:0});
+    if(Math.hypot(x,z)<OV.half)nearTrees.push(i);
+  });
+  treeMesh.instanceMatrix.needsUpdate=true;
+  if(treeMesh.instanceColor)treeMesh.instanceColor.needsUpdate=true;
+  scene.add(treeMesh);
+}
+function setTree(i,rgb,hScale){
+  const t=treeData[i],m=new THREE.Matrix4(),q=new THREE.Quaternion();
+  m.compose(new THREE.Vector3(t.x,hAt(t.x,t.z)-1,t.z),q,new THREE.Vector3(t.r*(hScale<1?.55:1),t.h*hScale,t.r*(hScale<1?.55:1)));
+  treeMesh.setMatrixAt(i,m);treeMesh.setColorAt(i,new THREE.Color(rgb[0],rgb[1],rgb[2]));
+  treeMesh.instanceMatrix.needsUpdate=true;treeMesh.instanceColor.needsUpdate=true;
+}
+
+function buildStructures(){
+  const wallM=new THREE.MeshLambertMaterial({color:0xe9dfc8}),roofM=new THREE.MeshLambertMaterial({color:0x8a4b35});
+  HOUSES.forEach(hs=>{
+    const g=new THREE.Group(),y=hAt(hs.x,hs.z);
+    const walls=new THREE.Mesh(new THREE.BoxGeometry(30,11,20),wallM.clone());walls.position.y=5.5;
+    const roof=new THREE.Mesh(new THREE.ConeGeometry(22,10,4),roofM.clone());roof.position.y=16;roof.rotation.y=Math.PI/4;roof.scale.set(1,1,.7);
+    g.add(walls,roof);g.position.set(hs.x,y,hs.z);g.rotation.y=hs.rot;scene.add(g);
+    houseObjs.push({g,walls,roof,lost:false,hs});
+  });
+  // Engine 2362 — Type 3 engine, red
+  const e=new THREE.Group(),red=new THREE.MeshLambertMaterial({color:0xc4162b});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(17,6.5,6.8),red);body.position.set(-1.5,4.2,0);
+  const cab=new THREE.Mesh(new THREE.BoxGeometry(5.5,5.8,6.6),red);cab.position.set(8.2,3.9,0);
+  const bar=new THREE.Mesh(new THREE.BoxGeometry(1.2,.8,5),new THREE.MeshBasicMaterial({color:0xff3344}));bar.position.set(8.6,7.2,0);
+  e.add(body,cab,bar);e.position.set(ENGINE.x,hAt(ENGINE.x,ENGINE.z),ENGINE.z);e.rotation.y=ENGINE.rot;e.scale.setScalar(1.5);scene.add(e);
+}
+
+function buildRings(){
+  [[WORLD.nocomR,0xf2a93b,.55],[WORLD.icomR,0x9bcbdd,.4]].forEach(([R,c,o])=>{
+    const pts=[];for(let i=0;i<=360;i++){const a=i/360*TAU,x=Math.cos(a)*R,z=Math.sin(a)*R;pts.push(new THREE.Vector3(x,hAt(x,z)+14,z));}
+    const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+      new THREE.LineDashedMaterial({color:c,dashSize:90,gapSize:70,transparent:true,opacity:o}));
+    line.computeLineDistances();scene.add(line);
+  });
+}
+
+// ── Hi-res fire zone: a terrain-conforming patch whose texture carries the
+//    burn scar, the flame front, and every retardant and water line.
+function buildOverlay(){
+  const R=OV.res,res0=512,c0=makeCanvas(res0,res0),g0=c0.getContext('2d'),img=g0.createImageData(res0,res0);
+  for(let py=0;py<res0;py++)for(let px=0;px<res0;px++){
+    const x=-OV.half+(px+.5)/res0*OV.size,z=-OV.half+(py+.5)/res0*OV.size,c=groundColor(x,z),i=(py*res0+px)*4;
+    img.data[i]=c[0];img.data[i+1]=c[1];img.data[i+2]=c[2];img.data[i+3]=255;
+  }
+  g0.putImageData(img,0,0);
+  ovBase=makeCanvas(R,R);const gb=ovBase.getContext('2d');
+  gb.drawImage(c0,0,0,R,R);
+  for(let i=0;i<30000;i++){const x=rnd()*R,y=rnd()*R,v=rnd();
+    gb.fillStyle=v<.55?'rgba(18,22,12,.22)':'rgba(225,212,170,.12)';gb.fillRect(x,y,1.6,1.6);}
+  const k=R/OV.size,w2o=(x,z)=>[(x+OV.half)*k,(z+OV.half)*k];
+  drawRoadAndFeatures(gb,w2o,k);
+  // feather the patch edge into the wide terrain
+  gb.globalCompositeOperation='destination-in';
+  const fade=gb.createRadialGradient(R/2,R/2,R*.36,R/2,R/2,R*.5);
+  fade.addColorStop(0,'rgba(0,0,0,1)');fade.addColorStop(1,'rgba(0,0,0,0)');
+  gb.fillStyle=fade;gb.fillRect(0,0,R,R);gb.globalCompositeOperation='source-over';
+  ovCanvas=makeCanvas(R,R);ovCtx=ovCanvas.getContext('2d');
+  ovTex=new THREE.CanvasTexture(ovCanvas);ovTex.anisotropy=renderer.capabilities.getMaxAnisotropy();
+  const geo=new THREE.PlaneGeometry(OV.size,OV.size,150,150);geo.rotateX(-Math.PI/2);
+  const p=geo.attributes.position;
+  for(let i=0;i<p.count;i++)p.setY(i,hAt(p.getX(i),p.getZ(i))+1.2);
+  geo.computeVertexNormals();
+  ovMesh=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({map:ovTex,transparent:true,depthWrite:false,
+    polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));
+  ovMesh.renderOrder=-1;scene.add(ovMesh);
+}
+function w2o(x,z){const k=OV.res/OV.size;return [(x+OV.half)*k,(z+OV.half)*k];}
+
+// ════════════════════════════════════════════════════════════════════
+//  PARTICLES — one shader for flame, smoke, embers, retardant, water
+// ════════════════════════════════════════════════════════════════════
+const PS=[];
+function spriteTex(kind){
+  const s=128,c=makeCanvas(s,s),g=c.getContext('2d');
+  if(kind==='puff'){
+    for(let i=0;i<9;i++){const x=s/2+(rnd()-.5)*s*.36,y=s/2+(rnd()-.5)*s*.36,r=s*(.18+rnd()*.2);
+      const gr=g.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,'rgba(255,255,255,.55)');gr.addColorStop(1,'rgba(255,255,255,0)');
+      g.fillStyle=gr;g.fillRect(0,0,s,s);}
+  } else {
+    const gr=g.createRadialGradient(s/2,s/2,0,s/2,s/2,s/2);
+    gr.addColorStop(0,'rgba(255,255,255,1)');gr.addColorStop(.35,'rgba(255,255,255,.55)');gr.addColorStop(1,'rgba(255,255,255,0)');
+    g.fillStyle=gr;g.fillRect(0,0,s,s);
+  }
+  return new THREE.CanvasTexture(c);
+}
+function makePS(N,tex,additive){
+  const geo=new THREE.BufferGeometry();
+  const pos=new Float32Array(N*3),size=new Float32Array(N),alpha=new Float32Array(N),col=new Float32Array(N*3);
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3).setUsage(THREE.DynamicDrawUsage));
+  geo.setAttribute('psize',new THREE.BufferAttribute(size,1).setUsage(THREE.DynamicDrawUsage));
+  geo.setAttribute('palpha',new THREE.BufferAttribute(alpha,1).setUsage(THREE.DynamicDrawUsage));
+  geo.setAttribute('pcolor',new THREE.BufferAttribute(col,3).setUsage(THREE.DynamicDrawUsage));
+  const mat=new THREE.ShaderMaterial({
+    uniforms:{map:{value:tex},scale:{value:400}},
+    vertexShader:'attribute float psize;attribute float palpha;attribute vec3 pcolor;varying float vA;varying vec3 vC;uniform float scale;'+
+      'void main(){vC=pcolor;vec4 mv=modelViewMatrix*vec4(position,1.0);vA=palpha*smoothstep(90.0,520.0,-mv.z);'+
+      'gl_PointSize=min(psize*scale/max(1.0,-mv.z),340.0);gl_Position=projectionMatrix*mv;}',
+    fragmentShader:'uniform sampler2D map;varying float vA;varying vec3 vC;'+
+      'void main(){vec4 t=texture2D(map,gl_PointCoord);float a=t.a*vA;if(a<0.004)discard;gl_FragColor=vec4(vC*t.rgb,a);}',
+    transparent:true,depthWrite:false,blending:additive?THREE.AdditiveBlending:THREE.NormalBlending
+  });
+  const pts=new THREE.Points(geo,mat);pts.frustumCulled=false;pts.renderOrder=2;scene.add(pts);
+  const sys={N,geo,mat,pts,pos,size,alpha,col,vx:new Float32Array(N),vy:new Float32Array(N),vz:new Float32Array(N),
+    life:new Float32Array(N),max:new Float32Array(N),s0:new Float32Array(N),s1:new Float32Array(N),a0:new Float32Array(N),
+    kind:new Uint8Array(N),cur:0};
+  PS.push(sys);return sys;
+}
+function psEmit(sys,x,y,z,vx,vy,vz,life,s0,s1,a0,r,g,b,kind){
+  const i=sys.cur;sys.cur=(sys.cur+1)%sys.N;
+  sys.pos[i*3]=x;sys.pos[i*3+1]=y;sys.pos[i*3+2]=z;sys.vx[i]=vx;sys.vy[i]=vy;sys.vz[i]=vz;
+  sys.life[i]=0;sys.max[i]=life;sys.s0[i]=s0;sys.s1[i]=s1;sys.a0[i]=a0;
+  sys.col[i*3]=r;sys.col[i*3+1]=g;sys.col[i*3+2]=b;sys.kind[i]=kind||0;
+}
+let flamePS,smokePS,emberPS,dropPS;
+function buildParticles(){
+  const dot=spriteTex('dot'),puff=spriteTex('puff');
+  smokePS=makePS(420,puff,false);
+  flamePS=makePS(700,dot,true);
+  emberPS=makePS(260,dot,true);
+  dropPS=makePS(600,puff,false);
+}
+</script>
+<script>
+// ════════════════════════════════════════════════════════════════════
+//  FIRE — 96 rays from the ignition point. Each ray spreads by wind
+//  alignment (elliptical) and slope. A painted retardant line that a ray
+//  meets stops that ray; water cools nearby rays for a while.
+// ════════════════════════════════════════════════════════════════════
+const FIRE={N:96,mult:new Float32Array(96),r:new Float32Array(96),held:new Int16Array(96).fill(-1),cool:new Float32Array(96),
+  active:1,smolder:[]};
+const LINES=[];
+function spreadTheta(){return compassToTheta((S.wx.dir+180)%360);}
+function rayTheta(i){return i/FIRE.N*TAU;}
+function rAt(t){const f=(((t%TAU)+TAU)%TAU)/TAU*FIRE.N,i=Math.floor(f)%FIRE.N,j=(i+1)%FIRE.N;return lerp(FIRE.r[i],FIRE.r[j],f-Math.floor(f));}
+function insideFire(x,z){return Math.hypot(x,z)<rAt(Math.atan2(z,x));}
+function firePt(t,extra){const r=rAt(t)+(extra||0);return {x:Math.cos(t)*r,z:Math.sin(t)*r};}
+
+function fireInit(){
+  const th=spreadTheta();
+  for(let i=0;i<FIRE.N;i++){const d=angDiff(rayTheta(i),th);FIRE.r[i]=82+56*Math.max(0,Math.cos(d))+8*vnoise(i*.7,3);}
+  for(let i=0;i<FIRE.N;i++)FIRE.mult[i]=.72+.62*fbm(i*.21,5.3,3)+.18*vnoise(i*1.7,2.1);
+  FIRE.held.fill(-1);FIRE.cool.fill(0);
+  for(let i=0;i<80;i++)FIRE.smolder.push([rnd()*TAU,Math.sqrt(rnd())*.9,rnd()*TAU]);
+}
+function rayHit(th,L){
+  const ux=Math.cos(th),uz=Math.sin(th),dx=L.x2-L.x1,dz=L.z2-L.z1,len=Math.hypot(dx,dz)||1,ex=dx/len,ez=dz/len;
+  const ax=L.x1-ex*L.w*.5,az=L.z1-ez*L.w*.5,vx=(L.x2+ex*L.w*.5)-ax,vz=(L.z2+ez*L.w*.5)-az;
+  const den=ux*vz-uz*vx; if(Math.abs(den)<1e-6)return null;
+  const t=(ax*vz-az*vx)/den,s=(ax*uz-az*ux)/den;
+  if(t<=0||s<0||s>1)return null;
+  const sinA=Math.max(.25,Math.abs(den)/Math.hypot(vx,vz));
+  return {t:t-(L.w*.5)/sinA,s};
+}
+function fireStep(dt){
+  const th0=spreadTheta(),R=(.30+S.wx.wind*.075)*S.fireSpeed,e=.866;
+  for(let i=0;i<FIRE.N;i++){
+    if(FIRE.held[i]>=0)continue;
+    const th=rayTheta(i),c=Math.cos(th),s=Math.sin(th),r=FIRE.r[i];
+    let rate=R*(1-e)/(1-e*Math.cos(angDiff(th,th0)))*FIRE.mult[i];
+    const fx=c*r,fz=s*r,dh=hAt(fx+c*30,fz+s*30)-hAt(fx,fz);
+    rate*=clamp(1+dh/30*2.2,.55,2.2);
+    if(FIRE.cool[i]>0){rate*=.15;FIRE.cool[i]-=dt;}
+    // keep the perimeter from going spiky: a ray well inside both neighbours catches up
+    const nb=Math.min(FIRE.r[(i+FIRE.N-1)%FIRE.N],FIRE.r[(i+1)%FIRE.N]);
+    if(nb>r*1.14)rate+=(nb-r)*.05;
+    let nr=r+rate*dt;
+    for(let k=0;k<LINES.length;k++){
+      const L=LINES[k];if(L.kind!=='ret'||L.prog<=0)continue;
+      const h=rayHit(th,L);
+      if(h&&h.s<=L.prog+.02&&r<=h.t+2&&nr>=h.t){nr=Math.max(r,h.t);FIRE.held[i]=k;break;}
+    }
+    FIRE.r[i]=Math.min(nr,1230);
+  }
+}
+function fireStats(){
+  let area=0,held=0,cooled=0,tot=0;const dA=TAU/FIRE.N;
+  for(let i=0;i<FIRE.N;i++){const r=FIRE.r[i];area+=.5*r*r*dA;tot+=r;
+    if(FIRE.held[i]>=0){held+=r;continue;}
+    let guarded=false;
+    for(const L of LINES){if(L.kind!=='ret'||L.prog<=0)continue;const h=rayHit(rayTheta(i),L);
+      if(h&&h.s<=L.prog+.02&&h.t>=r-2&&h.t<r+700){guarded=true;break;}}
+    if(guarded)held+=r;else if(FIRE.cool[i]>0)cooled+=r*.35;}
+  let hard=0;for(let i=0;i<FIRE.N;i++)if(FIRE.held[i]>=0)hard+=FIRE.r[i];
+  return {acres:area/4047,contain:clamp((held+cooled)/tot,0,1)*100,active:1-(hard/tot)};
+}
+function anatomy(){
+  const th=spreadTheta();
+  return {head:firePt(th,150),heel:firePt(th+Math.PI,120),left:firePt(th-Math.PI/2,150),right:firePt(th+Math.PI/2,150)};
+}
+
+// Where a drop goes for a given assignment — placed just outside the current
+// perimeter on that segment of the fire, flown in the direction it's laid.
+function lineFor(asn,ac){
+  const th=spreadTheta(),ux=Math.cos(th),uz=Math.sin(th);
+  const len=ac.dropLen||430,w=ac.dropW||50,tie=ac.brief&&ac.brief.tie;
+  let cx,cz,ax,az;
+  if(asn==='head'){
+    const d=rAt(th)+150;cx=ux*d;cz=uz*d;ax=Math.cos(th-Math.PI/2);az=Math.sin(th-Math.PI/2);
+  } else if(asn==='heel'){
+    const d=rAt(th+Math.PI)+90;cx=-ux*d;cz=-uz*d;ax=Math.cos(th+Math.PI/2);az=Math.sin(th+Math.PI/2);
+  } else {
+    const side=asn==='right'?th+Math.PI/2:th-Math.PI/2,rs=rAt(side),fwd=rAt(th)*(tie?.5:.22);
+    cx=Math.cos(side)*(rs+70)+ux*fwd;cz=Math.sin(side)*(rs+70)+uz*fwd;ax=ux;az=uz;
+  }
+  return {x1:cx-ax*len/2,z1:cz-az*len/2,x2:cx+ax*len/2,z2:cz+az*len/2,w,len,asn};
+}
+
+// ── Overlay painting: burn scar, ash, smoulder, retardant, water, flame front
+let ovDirty=true,ovTimer=0;
+function paintOverlay(){
+  const g=ovCtx,R=OV.res,k=R/OV.size;
+  g.clearRect(0,0,R,R);g.drawImage(ovBase,0,0);
+  const pts=[];for(let i=0;i<FIRE.N;i++){const t=rayTheta(i);pts.push(w2o(Math.cos(t)*FIRE.r[i],Math.sin(t)*FIRE.r[i]));}
+  g.save();g.beginPath();pts.forEach(([a,b],i)=>i?g.lineTo(a,b):g.moveTo(a,b));g.closePath();g.clip();
+  g.fillStyle='rgba(26,21,17,.95)';g.fillRect(0,0,R,R);
+  const [ox,oz]=w2o(0,0);let mr=0;for(let i=0;i<FIRE.N;i++)mr+=FIRE.r[i];mr=mr/FIRE.N*k;
+  const ash=g.createRadialGradient(ox,oz,0,ox,oz,mr*.8);ash.addColorStop(0,'rgba(104,98,90,.8)');ash.addColorStop(1,'rgba(104,98,90,0)');
+  g.fillStyle=ash;g.fillRect(0,0,R,R);
+  const tnow=performance.now()/1000;
+  FIRE.smolder.forEach(([a,f,ph])=>{const r=rAt(a)*f,[x,y]=w2o(Math.cos(a)*r,Math.sin(a)*r);
+    g.fillStyle=`rgba(255,${110+60*Math.sin(tnow*2+ph)|0},40,${.16+.14*Math.sin(tnow*3+ph)})`;g.fillRect(x-1,y-1,2,2);});
+  g.restore();
+  g.lineCap='round';
+  LINES.forEach(L=>{
+    if(L.prog<=0)return;
+    const [a,b]=w2o(L.x1,L.z1),[c,d]=w2o(L.x1+(L.x2-L.x1)*L.prog,L.z1+(L.z2-L.z1)*L.prog);
+    if(L.kind==='ret'){
+      g.strokeStyle='rgba(112,46,42,.42)';g.lineWidth=L.w*k*.8;g.beginPath();g.moveTo(a,b);g.lineTo(c,d);g.stroke();
+      const lx=L.x2-L.x1,lz=L.z2-L.z1,ll=Math.hypot(lx,lz)||1,px=-lz/ll,pz=lx/ll;
+      (L.dabs||[]).forEach(([u,o,rr,al,lite])=>{if(u>L.prog)return;
+        const [x,y]=w2o(L.x1+lx*u+px*o*L.w,L.z1+lz*u+pz*o*L.w);
+        g.fillStyle=lite?`rgba(176,112,96,${al*.5})`:`rgba(132,50,46,${al*.85})`;
+        g.beginPath();g.arc(x,y,L.w*k*rr,0,TAU);g.fill();});
+    } else {
+      const al=clamp(1-L.age/110,0,1);if(al<=0)return;
+      g.strokeStyle=`rgba(74,122,160,${.6*al})`;g.lineWidth=L.w*k;g.beginPath();g.moveTo(a,b);g.lineTo(c,d);g.stroke();
+    }
+  });
+  // flame front — active segments glow, held segments go dark
+  const fl=.85+.15*Math.sin(tnow*9);
+  g.lineJoin='round';
+  for(let pass=0;pass<2;pass++){
+    for(let i=0;i<FIRE.N;i++){
+      const j=(i+1)%FIRE.N,held=FIRE.held[i]>=0&&FIRE.held[j]>=0,cool=FIRE.cool[i]>0;
+      g.beginPath();g.moveTo(pts[i][0],pts[i][1]);g.lineTo(pts[j][0],pts[j][1]);
+      if(held){ if(pass)continue; g.strokeStyle='rgba(40,34,30,.9)';g.lineWidth=3;}
+      else if(pass===0){g.strokeStyle=`rgba(230,80,20,${(cool?.08:.22)*fl})`;g.lineWidth=11;}
+      else {const w=.6+.4*vnoise(i*.9,tnow*1.7);g.strokeStyle=cool?'rgba(150,120,90,.7)':`rgba(255,${120+60*w|0},40,${.55+.4*w})`;g.lineWidth=cool?2.5:2+3*w;}
+      g.stroke();
+    }
+  }
+  ovTex.needsUpdate=true;
+}
+
+// ── Per-frame particle emission and integration
+let emitAcc={flame:0,smoke:0,ember:0};
+function emitFire(dt){
+  const th0=spreadTheta(),wind=S.wx.wind,wx=Math.cos(th0)*wind*1.35,wz=Math.sin(th0)*wind*1.35;
+  const st=S.lastStats||{active:1};
+  emitAcc.flame+=dt*(220+380*st.active);
+  emitAcc.smoke+=dt*(10+18*st.active);
+  emitAcc.ember+=dt*(8+16*st.active);
+  let guard=0;
+  while(emitAcc.flame>=1&&guard++<200){
+    emitAcc.flame--;
+    const i=(Math.random()*FIRE.N)|0;if(FIRE.held[i]>=0)continue;
+    const t=rayTheta(i)+(Math.random()-.5)*TAU/FIRE.N,r=rAt(t)-Math.random()*10;
+    const al=Math.cos(angDiff(t,th0)),head=Math.max(0,al),cool=FIRE.cool[i]>0;
+    if(cool&&Math.random()<.8)continue;
+    if(Math.random()>.22+.78*head)continue;
+    const x=Math.cos(t)*r,z=Math.sin(t)*r;
+    psEmit(flamePS,x,hAt(x,z)+4,z,wx*.25+(Math.random()-.5)*6,20+Math.random()*24+head*26,wz*.25+(Math.random()-.5)*6,
+      .45+Math.random()*.6,(16+Math.random()*16)*(1+head*.8),5,.75,1,.62,.25,0);
+  }
+  guard=0;
+  while(emitAcc.smoke>=1&&guard++<60){
+    emitAcc.smoke--;
+    const t=th0+(Math.random()-.5)*(Math.random()<.65?1.4:TAU),r=rAt(t)-Math.random()*40;
+    const x=Math.cos(t)*r,z=Math.sin(t)*r,v=.5+Math.random()*.16;
+    psEmit(smokePS,x,hAt(x,z)+20,z,wx*.55+(Math.random()-.5)*8,42+Math.random()*30,wz*.55+(Math.random()-.5)*8,
+      15+Math.random()*7,80+Math.random()*50,380+Math.random()*160,.6,v*1.02,v*.95,v*.86,1);
+  }
+  guard=0;
+  while(emitAcc.ember>=1&&guard++<40){
+    emitAcc.ember--;
+    const t=th0+(Math.random()-.5)*1.1,r=rAt(t),x=Math.cos(t)*r,z=Math.sin(t)*r;
+    psEmit(emberPS,x,hAt(x,z)+18,z,wx*1.6+(Math.random()-.5)*14,30+Math.random()*30,wz*1.6+(Math.random()-.5)*14,
+      2+Math.random()*2.5,7+Math.random()*5,3,1,1,.62,.22,2);
+  }
+}
+function updatePS(sys,dt){
+  const N=sys.N;
+  for(let i=0;i<N;i++){
+    if(sys.life[i]>=sys.max[i]){sys.alpha[i]=0;sys.size[i]=0;continue;}
+    sys.life[i]+=dt;const t=sys.life[i]/sys.max[i],k=sys.kind[i],i3=i*3;
+    if(k===1){sys.vy[i]*=1-dt*.06;}
+    else if(k===0){sys.vy[i]+=12*dt;sys.col[i3+1]=.62-.42*t;sys.col[i3+2]=.25-.2*t;}
+    else if(k===3||k===4){sys.vy[i]-=60*dt;}
+    sys.pos[i3]+=sys.vx[i]*dt;sys.pos[i3+1]+=sys.vy[i]*dt;sys.pos[i3+2]+=sys.vz[i]*dt;
+    if((k===3||k===4)&&sys.pos[i3+1]<hAt(sys.pos[i3],sys.pos[i3+2])+2){sys.life[i]=sys.max[i];}
+    const fadeIn=k===1?clamp(t*6,0,1):1;
+    sys.alpha[i]=sys.a0[i]*fadeIn*(1-t)*(k===1?(1-t*.3):1);
+    sys.size[i]=lerp(sys.s0[i],sys.s1[i],k===1?Math.sqrt(t):t);
+  }
+  const a=sys.geo.attributes;
+  a.position.needsUpdate=true;a.psize.needsUpdate=true;a.palpha.needsUpdate=true;a.pcolor.needsUpdate=true;
+}
+
+// ── Once a second: trees and homes inside the perimeter burn
+function burnTick(){
+  nearTrees.forEach(i=>{const t=treeData[i];if(t.state===2)return;if(insideFire(t.x,t.z)){t.state=2;setTree(i,[.12,.1,.085],.7);}});
+  houseObjs.forEach(h=>{
+    if(h.lost||!insideFire(h.hs.x,h.hs.z))return;
+    h.lost=true;h.walls.material.color.setHex(0x1d1a17);h.roof.visible=false;h.walls.scale.y=.45;h.walls.position.y=2.5;
+    adjustScore('ops',-10,'structure lost on Ridgeline Rd');
+    addLog('SYSTEM','A structure on Ridgeline Road has been lost.','sys');
+    flashLeg('Structure lost on Ridgeline Rd','#7a1420');
+  });
+}
+// Retardant coats the canopy it lands on — keeps the line visible through the trees
+function coatTrees(L,p0,p1){
+  const ax=L.x1+(L.x2-L.x1)*p0,az=L.z1+(L.z2-L.z1)*p0,bx=L.x1+(L.x2-L.x1)*p1,bz=L.z1+(L.z2-L.z1)*p1;
+  const vx=bx-ax,vz=bz-az,vv=vx*vx+vz*vz||1;
+  nearTrees.forEach(i=>{const t=treeData[i];if(t.state!==0)return;
+    const u=clamp(((t.x-ax)*vx+(t.z-az)*vz)/vv,0,1),d=Math.hypot(t.x-(ax+vx*u),t.z-(az+vz*u));
+    if(d<L.w*.55){t.state=1;setTree(i,L.kind==='ret'?[.42,.17,.16]:[.2,.3,.27],1);}});
+}
+</script>
+<script>
+// ════════════════════════════════════════════════════════════════════
+//  SIM-TIME SCHEDULER — all game timers run on sim time, not wall time
+// ════════════════════════════════════════════════════════════════════
+const TIMERS=[];
+function after(sec,fn){TIMERS.push({at:S.simT+sec,fn});}
+function runTimers(){
+  for(let i=TIMERS.length-1;i>=0;i--){
+    if(TIMERS[i].at<=S.simT){const f=TIMERS[i].fn;TIMERS.splice(i,1);try{f();}catch(e){console.error(e);}}
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  AIRCRAFT
+// ════════════════════════════════════════════════════════════════════
+const AC_DEFS=[
+  {id:'t88',callsign:'TANKER 88',short:'T88',sn:'tanker 88',spokenCS:'Tanker 8 8',role:'tanker',
+   type:'S-2T, Type 3',color:'#F08A5D',capacity:1200,cruise:150,orbitR:820,orbitAlt:430,arrDelay:2},
+  {id:'t89',callsign:'TANKER 89',short:'T89',sn:'tanker 89',spokenCS:'Tanker 8 9',role:'tanker',
+   type:'S-2T, Type 3',color:'#F2C14B',capacity:1200,cruise:150,orbitR:960,orbitAlt:490,arrDelay:16},
+  {id:'h5bt',callsign:'COPTER 5 BRAVO TANGO',short:'5BT',sn:'copter 5 bravo tango',spokenCS:'Copter 5 Bravo Tango',role:'heli',
+   type:'UH-1H, Type 2',color:'#9BCBDD',capacity:300,cruise:85,orbitR:520,orbitAlt:230,arrDelay:75}];
+const EXTRA_DEFS=[
+  {id:'t90',callsign:'TANKER 90',short:'T90',sn:'tanker 90',spokenCS:'Tanker 9 0',role:'tanker',
+   type:'AT-802, Type 3',color:'#E8A0C8',capacity:800,cruise:135,orbitR:1060,orbitAlt:550},
+  {id:'h2bk',callsign:'COPTER 2 BRAVO KILO',short:'2BK',sn:'copter 2 bravo kilo',spokenCS:'Copter 2 Bravo Kilo',role:'heli',
+   type:'UH-1H, Type 2',color:'#B9E3C4',capacity:300,cruise:85,orbitR:600,orbitAlt:270}];
+
+function makeTanker(){
+  const g=new THREE.Group();
+  const white=new THREE.MeshLambertMaterial({color:0xf2f0ea}),red=new THREE.MeshLambertMaterial({color:0xc61d2c}),
+        dark=new THREE.MeshLambertMaterial({color:0x2b2e31});
+  const fus=new THREE.Mesh(new THREE.CylinderGeometry(2.0,1.3,30,10),white);fus.rotation.z=Math.PI/2;
+  const nose=new THREE.Mesh(new THREE.SphereGeometry(2.0,10,8),white);nose.position.x=15;nose.scale.set(1.4,1,1);
+  const cock=new THREE.Mesh(new THREE.BoxGeometry(5,1.6,2.8),dark);cock.position.set(11,2.2,0);
+  const wing=new THREE.Mesh(new THREE.BoxGeometry(6.2,.7,44),white);wing.position.set(2,2.1,0);
+  const tipA=new THREE.Mesh(new THREE.BoxGeometry(6.3,.75,3),red);tipA.position.set(2,2.1,20.5);
+  const tipB=tipA.clone();tipB.position.z=-20.5;
+  const nacA=new THREE.Mesh(new THREE.CylinderGeometry(1.5,1.2,10,8),red);nacA.rotation.z=Math.PI/2;nacA.position.set(4.5,1.2,7.8);
+  const nacB=nacA.clone();nacB.position.z=-7.8;
+  const fin=new THREE.Mesh(new THREE.BoxGeometry(5.5,7.5,.6),red);fin.position.set(-12.8,4.5,0);
+  const stab=new THREE.Mesh(new THREE.BoxGeometry(4,.5,15),white);stab.position.set(-12.8,1.4,0);
+  const stripe=new THREE.Mesh(new THREE.BoxGeometry(24,.9,4.15),red);stripe.position.set(0,-.2,0);
+  g.add(fus,nose,cock,wing,tipA,tipB,nacA,nacB,fin,stab,stripe);
+  g.scale.setScalar(1.75);return g;
+}
+function makeHeli(){
+  const g=new THREE.Group();
+  const white=new THREE.MeshLambertMaterial({color:0xf2f0ea}),red=new THREE.MeshLambertMaterial({color:0xc61d2c}),
+        dark=new THREE.MeshLambertMaterial({color:0x2b2e31});
+  const body=new THREE.Mesh(new THREE.SphereGeometry(3.4,12,10),white);body.scale.set(1.7,1,1);
+  const belly=new THREE.Mesh(new THREE.BoxGeometry(8,1.4,4.6),red);belly.position.set(0,-1.6,0);
+  const boom=new THREE.Mesh(new THREE.CylinderGeometry(.75,.45,13,8),white);boom.rotation.z=Math.PI/2;boom.position.set(-10,.6,0);
+  const fin=new THREE.Mesh(new THREE.BoxGeometry(2.4,3.6,.4),red);fin.position.set(-16.2,1.8,0);
+  const mast=new THREE.Mesh(new THREE.CylinderGeometry(.3,.3,1.6,6),dark);mast.position.y=3.8;
+  const rotor=new THREE.Mesh(new THREE.CylinderGeometry(11,11,.12,28),
+    new THREE.MeshBasicMaterial({color:0x222222,transparent:true,opacity:.28,depthWrite:false}));rotor.position.y=4.6;
+  const skidA=new THREE.Mesh(new THREE.BoxGeometry(9,.3,.3),dark);skidA.position.set(0,-3.3,2.2);
+  const skidB=skidA.clone();skidB.position.z=-2.2;
+  const line=new THREE.Mesh(new THREE.CylinderGeometry(.08,.08,11,4),dark);line.position.set(0,-8.6,0);
+  const bucket=new THREE.Mesh(new THREE.CylinderGeometry(1.6,1.1,2.2,10),red);bucket.position.set(0,-15,0);
+  g.add(body,belly,boom,fin,mast,rotor,skidA,skidB,line,bucket);
+  g.userData.rotor=rotor;g.scale.setScalar(1.9);return g;
+}
+
+function acCreate(def){
+  const ac={...def,obj:def.role==='heli'?makeHeli():makeTanker(),pos:{x:0,y:0,z:0},psi:0,spd:def.cruise,bank:0,
+    route:[],status:'inbound',currentLeg:'',onCanvas:false,spawned:false,cleared:false,
+    turnRate:def.role==='heli'?1.6:.5,dropLen:430,dropW:50};
+  ac.obj.visible=false;scene.add(ac.obj);
+  const el=document.createElement('div');el.className='lbl lbl-ac';el.style.color=def.color;el.style.display='none';
+  $('labels').appendChild(el);ac.label=el;
+  return ac;
+}
+function placeAt(ac,bearingTheta,R,y){
+  ac.pos.x=Math.cos(bearingTheta)*R;ac.pos.z=Math.sin(bearingTheta)*R;ac.pos.y=y;
+  ac.psi=bearingTheta+Math.PI;      // pointed at the fire
+}
+function routeHold(ac){
+  ac.route=[{k:'orbit',R:WORLD.holdR,y:FIRE_H+900,spd:ac.cruise,lead:.32}];
+}
+function routeOrbit(ac){
+  ac.route=[{k:'orbit',R:ac.orbitR,y:FIRE_H+ac.orbitAlt,spd:ac.cruise,lead:.36}];
+}
+
+function acUpdate(ac,dt){
+  if(!ac.onCanvas)return;
+  const seg=ac.route[0];
+  let tx=ac.pos.x+Math.cos(ac.psi)*300,tz=ac.pos.z+Math.sin(ac.psi)*300,ty=ac.pos.y,spd=ac.cruise,hover=false;
+  if(seg){
+    if(seg.k==='orbit'){
+      const a=Math.atan2(ac.pos.z,ac.pos.x)+seg.lead;tx=Math.cos(a)*seg.R;tz=Math.sin(a)*seg.R;ty=seg.y;spd=seg.spd;
+    } else if(seg.k==='pt'){
+      tx=seg.x;tz=seg.z;ty=seg.y;spd=seg.spd;
+      if(Math.hypot(tx-ac.pos.x,tz-ac.pos.z)<seg.cap){ac.route.shift();if(seg.cb)seg.cb();}
+    } else if(seg.k==='line'){
+      const along=(ac.pos.x-seg.px)*seg.dx+(ac.pos.z-seg.pz)*seg.dz,la=along+seg.look;
+      tx=seg.px+seg.dx*la;tz=seg.pz+seg.dz*la;ty=seg.yFn?seg.yFn(along,ac):seg.y;spd=seg.spd;
+      if(seg.onAlong)seg.onAlong(along);
+    } else if(seg.k==='hover'){
+      hover=true;tx=seg.x;tz=seg.z;ty=seg.y;
+      if(seg.onT)seg.onT(dt);
+      seg.t-=dt;if(seg.t<=0){ac.route.shift();if(seg.cb)seg.cb();}
+    }
+  }
+  if(hover){
+    ac.pos.x=lerp(ac.pos.x,tx,1-Math.exp(-dt*1.4));ac.pos.z=lerp(ac.pos.z,tz,1-Math.exp(-dt*1.4));
+    ac.spd=lerp(ac.spd,0,1-Math.exp(-dt*2));ac.bank=lerp(ac.bank,0,1-Math.exp(-dt*3));ac.psi+=dt*.15;
+  } else {
+    const want=Math.atan2(tz-ac.pos.z,tx-ac.pos.x),d=angDiff(want,ac.psi),mx=ac.turnRate*dt,turn=clamp(d,-mx,mx);
+    ac.psi+=turn;
+    ac.bank=lerp(ac.bank,clamp(turn/Math.max(dt,1e-3)*.95,-.62,.62),1-Math.exp(-dt*3));
+    ac.spd=lerp(ac.spd,spd,1-Math.exp(-dt*.8));
+    ac.pos.x+=Math.cos(ac.psi)*ac.spd*dt;ac.pos.z+=Math.sin(ac.psi)*ac.spd*dt;
+  }
+  const ground=hAt(ac.pos.x,ac.pos.z),floor=ground+(ac.role==='heli'?10:42),tgt=Math.max(ty,floor),vs=ac.role==='heli'?35:70;
+  ac.pos.y+=clamp(tgt-ac.pos.y,-vs*dt,vs*dt);if(ac.pos.y<floor)ac.pos.y=floor;
+  ac.obj.position.set(ac.pos.x,ac.pos.y,ac.pos.z);
+  ac.obj.rotation.set(ac.bank,-ac.psi,0,'YXZ');
+  if(ac.obj.userData.rotor)ac.obj.userData.rotor.rotation.y+=dt*30;
+}
+
+// ── TANKER PATTERN: downwind → base → final → drop run → exit
+function startPattern(ac){
+  const L=lineFor(ac.assignment||'left',ac);ac.pendingLine=L;
+  const len=Math.hypot(L.x2-L.x1,L.z2-L.z1),dx=(L.x2-L.x1)/len,dz=(L.z2-L.z1)/len;
+  let nx=dz,nz=-dx;const mx=(L.x1+L.x2)/2,mz=(L.z1+L.z2)/2;if(nx*mx+nz*mz<0){nx=-nx;nz=-nz;}
+  const off=780,fin=1650,yP=FIRE_H+340;
+  const DW={x:L.x2+nx*off+dx*420,z:L.z2+nz*off+dz*420},BASE={x:L.x1-dx*fin+nx*off,z:L.z1-dz*fin+nz*off};
+  const FS={x:L.x1-dx*fin,z:L.z1-dz*fin},gStart=hAt(L.x1,L.z1);
+  ac._finalCalled=false;ac._warned=false;ac.cleared=false;
+  ac.route=[
+    {k:'pt',x:DW.x,z:DW.z,y:yP,spd:ac.cruise,cap:300,cb:()=>legCall(ac,'downwind')},
+    {k:'pt',x:BASE.x,z:BASE.z,y:yP-40,spd:ac.cruise,cap:300,cb:()=>legCall(ac,'base')},
+    {k:'line',px:FS.x,pz:FS.z,dx,dz,look:430,spd:ac.cruise*.83,
+      yFn:(al,a)=>{const f=clamp(al/fin,0,1);return lerp(hAt(a.pos.x,a.pos.z)+270,gStart+78,f);},
+      onAlong:al=>finalAlong(ac,al,fin,dx,dz)}];
+}
+function legCall(ac,leg){
+  if(ac.status!=='maneuvering')return;
+  ac.currentLeg=leg;
+  rtx(ac.callsign,`${ac.spokenCS} — ${leg}.`,'rx',ac.role,'tac');
+  flashLeg(`${ac.short} ${leg}`,'#3a5f37');
+  setNextStep(`Acknowledge: "${ac.spokenCS}, I have your ${leg}."`);
+  setAwaiting(ac);
+}
+function finalAlong(ac,al,fin,dx,dz){
+  if(!ac._finalCalled&&al>-250&&Math.abs(angDiff(ac.psi,Math.atan2(dz,dx)))<.32){
+    ac._finalCalled=true;ac.status='on_final';ac.currentLeg='final';
+    rtx(ac.callsign,`${ac.spokenCS} — final.`,'rx',ac.role,'tac');
+    flashLeg(`${ac.short} final — needs drop clearance`,'#8a2a1a');
+    setNextStep(`"${ac.spokenCS}, I have your final, you are clear to drop."`);
+    setAwaiting(ac);
+    after(6,()=>{if(ac.status==='on_final'&&!ac.cleared&&!ac._warned){ac._warned=true;
+      rtx(ac.callsign,`${ac.spokenCS} — standing by for drop clearance.`,'rx',ac.role,'tac');}});
+  }
+  if(al>=fin-15){
+    if(ac.cleared)startDropRun(ac);else goAround(ac);
+  }
+}
+function goAround(ac){
+  ac.status='orbit';ac.currentLeg='';ac.cleared=false;ac.pendingLine=null;
+  rtx(ac.callsign,`${ac.spokenCS} — going around, no drop clearance.`,'rx',ac.role,'tac');
+  adjustScore('timing',-5,'went around — no drop clearance on final');
+  routeOrbit(ac);hidePrompt();
+}
+function startDropRun(ac){
+  const L=ac.pendingLine;if(!L){goAround(ac);return;}
+  L.kind='ret';L.prog=0;L.age=0;L.by=ac.id;L.dabs=[];
+  for(let n=0,c=Math.ceil(L.len/7);n<c;n++)L.dabs.push([n/c+(Math.random()-.5)*.01,(Math.random()-.5)*.55,.28+Math.random()*.32,.3+Math.random()*.35,Math.random()<.18]);
+  LINES.push(L);
+  const len=Math.hypot(L.x2-L.x1,L.z2-L.z1),dx=(L.x2-L.x1)/len,dz=(L.z2-L.z1)/len;
+  ac.status='dropping';ac.currentLeg='';
+  S.aircraft.filter(h=>h.role==='heli'&&h.onCanvas&&!h.held&&(h.dipPhase==='toFire'||h.dipPhase==='dropping'))
+    .forEach(h=>{
+      adjustScore('ops',-5,`deconfliction — tanker drop with ${h.short} inbound to the fire`);
+      addLog('SYSTEM',`Deconfliction: ${ac.short} dropped while ${h.short} was working the fire. Hold rotor traffic at the pond before clearing a tanker to drop.`,'sys');
+      flashLeg('Deconfliction — rotor traffic over the fire','#7a4a00');
+    });
+  ac.route=[{k:'line',px:L.x1,pz:L.z1,dx,dz,look:280,spd:ac.cruise*.8,
+    yFn:(al,a)=>hAt(a.pos.x,a.pos.z)+72,
+    onAlong:al=>{
+      const p=clamp(al/len,0,1);
+      if(p>L.prog){coatTrees(L,L.prog,p);L.prog=p;ovDirty=true;}
+      if(al>-20&&al<len){
+        for(let n=0;n<6;n++)psEmit(dropPS,ac.pos.x+(Math.random()-.5)*10,ac.pos.y-6,ac.pos.z+(Math.random()-.5)*10,
+          Math.cos(ac.psi)*ac.spd*.55+(Math.random()-.5)*18,-10-Math.random()*20,Math.sin(ac.psi)*ac.spd*.55+(Math.random()-.5)*18,
+          1.6+Math.random()*.8,18,62,.75,.72,.16,.2,3);
+      }
+      if(al>=len){L.prog=1;ovDirty=true;endDrop(ac,L,dx,dz);}
+    }}];
+}
+function endDrop(ac,L,dx,dz){
+  S.retDropped+=ac.capacity;markP('p5');
+  rtx(ac.callsign,`${ac.spokenCS} — clear and empty. ${ac.spokenCS}.`,'rx',ac.role,'tac');
+  ac.status='returning';ac.cleared=false;
+  // Drop assessment — tell the student whether it'll actually check spread
+  let black=0;for(let i=0;i<=20;i++){const x=L.x1+(L.x2-L.x1)*i/20,z=L.z1+(L.z2-L.z1)*i/20;if(insideFire(x,z))black++;}
+  black/=21;let guard=0;
+  for(let i=0;i<FIRE.N;i++){if(FIRE.held[i]>=0)continue;const h=rayHit(rayTheta(i),L);if(h&&h.t>FIRE.r[i])guard++;}
+  L.assess=black>.55?'black':guard<3?'wide':'good';
+  if(S.hints){
+    if(L.assess==='black')addLog('SYSTEM',`Drop assessment: ${ac.short}'s load landed mostly in the black — it won't check spread.`,'sys');
+    else if(L.assess==='wide')addLog('SYSTEM',`Drop assessment: ${ac.short}'s line isn't in front of active fire — little effect.`,'sys');
+    else addLog('SYSTEM',`Drop assessment: ${ac.short}'s line is ahead of ${Math.round(guard/FIRE.N*100)}% of the perimeter.`,'sys');
+  }
+  const ex={x:L.x2+dx*900,z:L.z2+dz*900},b=Math.atan2(ex.z,ex.x);
+  ac.route=[{k:'pt',x:ex.x,z:ex.z,y:FIRE_H+520,spd:ac.cruise,cap:320},
+    {k:'pt',x:Math.cos(b)*WORLD.spawnR,z:Math.sin(b)*WORLD.spawnR,y:FIRE_H+1000,spd:ac.cruise*1.15,cap:420,
+     cb:()=>{ac.onCanvas=false;ac.obj.visible=false;ac.label.style.display='none';schedReload(ac);}}];
+  after(2.2,()=>{
+    showPrompt(ac,`Critique the drop:\n"${ac.spokenCS}, good start, good line, load and return."\nor "…drop was short / long, adjust next load."`);
+    setNextStep(`Give ${ac.spokenCS} a drop critique`);
+  });
+}
+function schedReload(ac){
+  after(26+Math.random()*8,()=>{
+    const b=rnd()*TAU;placeAt(ac,b,WORLD.spawnR,FIRE_H+1000);
+    ac.onCanvas=true;ac.obj.visible=true;ac.status='inbound';ac._held7=false;ac._established=false;routeHold(ac);
+    const where=dirName(thetaToCompass(b));
+    rtx(ac.callsign,`Cedar Air Attack, ${ac.spokenCS} — reloaded, 12 miles to the ${where}, request altimeter and cleared altitude.`,'rx',ac.role,'tac');
+    ac._nextCall=S.opsElapsed+40;
+    after(1.6,()=>{if(ac.status==='inbound')setAwaiting(ac);});
+  });
+}
+
+// ── HELICOPTER: dip Pilgrim Pond, drop on its assigned flank, repeat
+function heliDropTheta(ac){
+  const th=spreadTheta(),a=ac.assignment||'right';
+  return a==='left'?th-Math.PI/2:a==='head'?th:a==='heel'?th+Math.PI:th+Math.PI/2;
+}
+function heliCycle(ac){
+  if(ac.status==='returning'||!ac.onCanvas)return;
+  if(ac.held){heliHold(ac);return;}
+  ac.dipPhase='toPond';
+  ac.route=[{k:'pt',x:POND.x,z:POND.z,y:POND_H+70,spd:ac.cruise,cap:60,cb:()=>{
+    ac.dipPhase='dipping';rtx(ac.callsign,`${ac.spokenCS} — dipping.`,'heli',ac.role,'tac');
+    ac.route=[{k:'hover',x:POND.x,z:POND.z,y:POND_H+16,t:4.5,cb:()=>{
+      if(ac.held){heliHold(ac);return;}
+      ac.dipPhase='toFire';rtx(ac.callsign,`${ac.spokenCS} — full bucket, inbound.`,'heli',ac.role,'tac');
+      const t=heliDropTheta(ac),D=firePt(t,30);
+      ac.route=[{k:'pt',x:D.x,z:D.z,y:hAt(D.x,D.z)+70,spd:ac.cruise,cap:70,cb:()=>{
+        ac.dipPhase='dropping';
+        const r=rAt(t),dl=170/Math.max(r,80),A=firePt(t-dl/2,18),B=firePt(t+dl/2,18);
+        const L={x1:A.x,z1:A.z,x2:B.x,z2:B.z,w:44,kind:'water',prog:0,age:0,by:ac.id};LINES.push(L);
+        for(let i=0;i<FIRE.N;i++)if(Math.abs(angDiff(rayTheta(i),t))<dl*.75+.05)FIRE.cool[i]=Math.max(FIRE.cool[i],80);
+        rtx(ac.callsign,`${ac.spokenCS} — water on the ${asnLabel(ac.assignment||'right')}.`,'heli',ac.role,'tac');
+        S.retDropped+=ac.capacity;
+        ac.route=[{k:'hover',x:D.x,z:D.z,y:hAt(D.x,D.z)+55,t:2.4,onT:dt2=>{
+          L.prog=Math.min(1,L.prog+dt2/2.2);ovDirty=true;
+          for(let n=0;n<5;n++)psEmit(dropPS,ac.pos.x+(Math.random()-.5)*6,ac.pos.y-26,ac.pos.z+(Math.random()-.5)*6,
+            (Math.random()-.5)*16,-14-Math.random()*16,(Math.random()-.5)*16,1.3,14,48,.6,.75,.86,.95,4);
+        },cb:()=>{L.prog=1;coatTrees(L,0,1);heliCycle(ac);}}];
+      }}];
+    }}];
+  }}];
+}
+function heliHold(ac){
+  ac.dipPhase='holding';
+  ac.route=[{k:'pt',x:POND.x+90,z:POND.z-60,y:POND_H+90,spd:ac.cruise,cap:70,
+    cb:()=>{ac.route=[{k:'hover',x:POND.x+90,z:POND.z-60,y:POND_H+90,t:1e9}];}}];
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  AIR ATTACK 230 — the camera. Right-hand orbit, looking in at the fire.
+// ════════════════════════════════════════════════════════════════════
+let aaTheta=Math.PI*.62,aaR=3400,aaHeading=0;
+function updateCamera(dt){
+  let targetR;
+  if(S.opsActive)targetR=WORLD.aaR;
+  else if(S.launched)targetR=lerp(4200,2200,clamp(S.blindT/100,0,1));
+  else targetR=3300;
+  aaR=lerp(aaR,targetR,1-Math.exp(-dt*.22));
+  const V=TAU*WORLD.aaR/WORLD.orbitPeriod;aaTheta+=V/aaR*dt;
+  const x=Math.cos(aaTheta)*aaR,z=Math.sin(aaTheta)*aaR;
+  const y=Math.max(FIRE_H+WORLD.aaAGL+(aaR-WORLD.aaR)*.14,hAt(x,z)+330);
+  camera.position.set(x,y,z);
+  const tx=-Math.sin(aaTheta),tz=Math.cos(aaTheta);
+  const lead=140*Math.min(1,camera.aspect);camera.lookAt(tx*lead,FIRE_H+20,tz*lead);
+  camera.rotateZ(-.035);               // slight right bank — you're in a turn
+  aaHeading=thetaToCompass(Math.atan2(tz,tx));
+}
+</script>
+<script>
+// ════════════════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════════════════
+const S={simT:0,secAcc:0,elapsed:0,launched:false,blindPhase:false,blindT:0,opsActive:false,opsElapsed:0,
+  critiqueShown:false,conditionsReported:false,neuReminded:false,engineAtScene:false,engineLineCleared:false,engineAsked:false,
+  fbTimer:0,fbDue:0,windShifted:false,windShiftAt:0,windRebriefed:false,
+  wx:{wind:12,dir:220,temp:94,rh:8},fireSpeed:1,retDropped:0,lastStats:null,incLevel:3,
+  aircraft:[],procedures:[],awaitingAC:null,awaitingQueue:[],
+  blindCount:0,blindCalls:[],blindFreqCount:{tac:0,vhf:0,rv:0},
+  score:{total:0,blind:0,timing:0,freq:0,ops:0,ledger:[]},hints:true,extrasOrdered:false,selFreq:'tac',review:true,pending:null,emptyHeard:0};
+let TIMESCALE=1,DEBUG=false;
+
+// ════════════════════════════════════════════════════════════════════
+//  AUDIO
+// ════════════════════════════════════════════════════════════════════
+let ACX=null;
+function getACX(){if(!ACX)ACX=new(window.AudioContext||window.webkitAudioContext)();return ACX;}
+function click(pre){try{const c=getACX(),b=c.createBuffer(1,Math.floor(c.sampleRate*.06),c.sampleRate),d=b.getChannelData(0);
+  for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.exp(-i/(d.length*.22))*(pre?.4:.2);
+  const s=c.createBufferSource();s.buffer=b;const g=c.createGain();g.gain.value=pre?.5:.3;s.connect(g);g.connect(c.destination);s.start();}catch(e){}}
+function dispatchBeeps(done){try{const c=getACX();[0,1,2].forEach(i=>{const t=c.currentTime+i*.3+.05,o=c.createOscillator(),g=c.createGain();
+  o.frequency.value=1050;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.45,t+.01);g.gain.setValueAtTime(.45,t+.16);g.gain.linearRampToValueAtTime(0,t+.18);
+  o.connect(g);g.connect(c.destination);o.start(t);o.stop(t+.19);});setTimeout(done,1100);}catch(e){setTimeout(done,900);}}
+function startEngineHum(){try{const c=getACX(),m=c.createGain();m.gain.value=0;m.connect(c.destination);m.gain.setTargetAtTime(.08,c.currentTime,2.5);
+  [[68,.7,'sawtooth'],[71,.6,'sawtooth'],[136,.22,'sawtooth'],[34,.4,'triangle']].forEach(([f,v,t])=>{const o=c.createOscillator(),g=c.createGain(),lp=c.createBiquadFilter();
+    lp.type='lowpass';lp.frequency.value=300;o.type=t;o.frequency.value=f;g.gain.value=v;o.connect(g);g.connect(lp);lp.connect(m);o.start();});}catch(e){}}
+
+// ── Speech: one queue, half duplex — nothing transmits while you're keyed up
+let speechQ=[],speaking=false,drainWatch=null;const VM={};
+function loadV(){const vs=(window.speechSynthesis?speechSynthesis.getVoices():[]).filter(v=>v.lang.startsWith('en'));
+  const pick=(p,i)=>{for(const n of p){const v=vs.find(v=>v.name.toLowerCase().includes(n.toLowerCase()));if(v)return v;}return vs[i]||vs[0]||null;};
+  VM.tanker={v:pick(['David','Mark','Daniel','Alex','Google US English'],0),rate:1.06,pitch:.74};
+  VM.heli={v:pick(['Google UK English Male','Thomas','Aaron','Nathan'],2),rate:1.15,pitch:1.08};
+  VM.dispatch={v:pick(['Samantha','Karen','Victoria','Google US English'],1),rate:1.06,pitch:.86};
+  VM.ground={v:pick(['Fred','Ralph','Daniel','Bruce'],3),rate:1.08,pitch:.76};}
+if(window.speechSynthesis){speechSynthesis.onvoiceschanged=loadV;loadV();}
+function spokenify(t){return t.replace(/\bN-?E-?U\b/g,'N E U').replace(/Air Attack\s*230/g,'Air Attack 2 3 0')
+  .replace(/Engine\s*2362/g,'Engine 2 3 6 2').replace(/\b2362\b/g,'2 3 6 2').replace(/\bTANKER\s*(\d)(\d)\b/gi,'Tanker $1 $2')
+  .replace(/122\.925/g,'one two two point nine two five');}
+function lamp(f,on){if(!f)return;const k=document.querySelector(`.key[data-f="${f}"]`);if(k)k.classList.toggle('rx',on);}
+function rtx(cs,msg,type,role,freq){speechQ.push({cs,msg,type,role,freq});if(!speaking)drainQ();}
+function drainQ(){
+  clearTimeout(drainWatch);
+  if(!speechQ.length){speaking=false;return;}
+  if(MIC.active){speaking=false;setTimeout(drainQ,350);return;}
+  speaking=true;const it=speechQ.shift();
+  addLog(it.cs,it.msg,it.type);lamp(it.freq,true);click(true);
+  const text=spokenify(it.msg),p=VM[it.role]||VM.tanker||{rate:1.05,pitch:.8};let done=false;
+  const fin=()=>{if(done)return;done=true;click(false);lamp(it.freq,false);speaking=false;clearTimeout(drainWatch);setTimeout(drainQ,260);};
+  try{if(window.speechSynthesis&&!S.mute){const u=new SpeechSynthesisUtterance(text);u.rate=p.rate;u.pitch=p.pitch;u.lang='en-US';if(p.v)u.voice=p.v;
+    u.onend=fin;u.onerror=fin;speechSynthesis.speak(u);}}catch(e){}
+  drainWatch=setTimeout(fin,S.mute?250:text.split(' ').length*430/(p.rate||1)+1700);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  MICROPHONE — one continuous session; holding a key only gates listening.
+//  Falls back to typed calls if the browser can't provide speech input.
+// ════════════════════════════════════════════════════════════════════
+const MIC={ok:false,active:false,freq:null,pending:'',acc:''};
+let recog=null,recogRunning=false,recogStarted=0,recogFails=0;
+// Ask for the microphone explicitly. Must be called straight from a click so
+// the browser shows its permission prompt.
+async function requestMic(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){micUnavailable('This browser doesn\u2019t do speech recognition (use Chrome or Edge).',false);return false;}
+  const pp=document.permissionsPolicy||document.featurePolicy;
+  if(pp&&pp.allowsFeature&&!pp.allowsFeature('microphone')){
+    micUnavailable('This page isn\u2019t allowed to use the microphone inside this window.',false);return false;}
+  if(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia){
+    $('heard').textContent='Allow the microphone when your browser asks…';$('heard').classList.add('live');
+    $('micBtn').textContent='Waiting for permission…';$('micBtn').disabled=true;
+    try{
+      const st=await navigator.mediaDevices.getUserMedia({audio:true});
+      st.getTracks().forEach(t=>t.stop());
+    }catch(e){
+      $('micBtn').disabled=false;$('micBtn').textContent='Enable mic';
+      const msg=e.name==='NotFoundError'?'No microphone was found on this computer.'
+        :e.name==='NotReadableError'?'Another app is using the microphone.'
+        :'Microphone permission was declined or blocked.';
+      micUnavailable(msg,true);return false;
+    }
+  }
+  MIC.granted=true;MIC.errs=0;recogFails=0;S.emptyHeard=0;
+  $('micBtn').disabled=false;$('micBtn').textContent='Enable mic';$('micBtn').style.display='none';
+  $('dictCard').classList.remove('show');
+  $('heard').textContent='Microphone on. Hold a key and talk; release, check, Enter.';
+  initMic();return true;
+}
+function watchMicPermission(){
+  try{navigator.permissions.query({name:'microphone'}).then(p=>{p.onchange=()=>{if(p.state==='granted'&&!MIC.ok)requestMic();};}).catch(()=>{});}catch(e){}
+}
+function initMic(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR)return;
+  if(recog){startRecog();return;}
+  recog=new SR();recog.continuous=true;recog.interimResults=true;recog.lang='en-US';
+  recog.onstart=()=>{recogRunning=true;recogStarted=Date.now();MIC.ok=true;micState();};
+  recog.onaudiostart=()=>{MIC.errs=0;};
+  recog.onresult=e=>{if(!MIC.active)return;let itr='',fin='';
+    for(let i=e.resultIndex;i<e.results.length;i++){if(e.results[i].isFinal)fin+=e.results[i][0].transcript+' ';else itr+=e.results[i][0].transcript;}
+    if(fin.trim()){MIC.acc+=(MIC.acc?' ':'')+fin.trim();MIC.pending=MIC.acc;}
+    const show=MIC.acc+(itr?' '+itr:'');if(show){$('heard').textContent=show;$('heard').classList.add('live');}};
+  recog.onerror=e=>{recogRunning=false;
+    if(e.error==='not-allowed'||e.error==='service-not-allowed')micUnavailable('The browser blocked speech recognition on this page.',true);
+    else if(e.error==='audio-capture'||e.error==='network'){
+      MIC.errs=(MIC.errs||0)+1;
+      if(MIC.errs>=4)micUnavailable(e.error==='network'
+        ?'The microphone is allowed, but the browser can\u2019t reach its speech service.'
+        :'The microphone is allowed, but no audio is reaching speech recognition.',true);}
+    dbg('speech error: '+e.error);};          // no-speech / aborted / network are routine — keep going
+  recog.onend=()=>{recogRunning=false;if(!MIC.ok)return;
+    recogFails=(Date.now()-recogStarted<400)?recogFails+1:0;
+    if(recogFails>=6){micUnavailable('Speech recognition keeps stopping on this page.',true);return;}
+    setTimeout(startRecog,recogFails?900:300);};
+  startRecog();
+}
+function startRecog(){if(recogRunning||!recog)return;try{recog.start();}catch(e){}}
+function dictationHow(){const ua=navigator.userAgent;
+  if(/iPhone|iPad|Android/.test(ua))return 'tap the microphone on your keyboard';
+  if(/CrOS/.test(ua))return 'press Search + D';
+  if(/Windows/.test(ua))return 'press Windows + H';
+  if(/Mac/.test(ua))return 'press the dictation key (or Fn twice)';
+  return 'start your system dictation';}
+let dictShown=false;
+function micUnavailable(msg,canRetry){
+  MIC.ok=false;MIC.active=false;micState();
+  if(recog){try{recog.abort();}catch(e){}}
+  $('micBtn').style.display=canRetry===false?'none':'block';$('dictRetry').style.display=canRetry===false?'none':'inline-block';
+  $('heard').textContent=`Mic unavailable — click the call box and ${dictationHow()} to dictate.`;$('heard').classList.remove('live');
+  if(!dictShown&&S.launched){dictShown=true;$('dictWhy').textContent=msg;$('dictHow').textContent=dictationHow();$('dictCard').classList.add('show');}
+}
+function setPending(text,f){
+  S.pending={text,freq:f};const t=$('typed');t.value=text;t.classList.add('pending');$('sendBtn').classList.add('show');
+  $('heard').textContent=`Heard on ${flbl(f)} — fix anything wrong, Enter to send, Esc to discard`;$('heard').classList.add('live');
+}
+function clearPending(){S.pending=null;const t=$('typed');t.value='';t.classList.remove('pending');$('sendBtn').classList.remove('show');}
+function sendCall(){
+  const t=$('typed'),txt=t.value.trim();if(!txt)return;
+  const f=S.pending?S.pending.freq:S.selFreq;clearPending();t.blur();processXmit(txt,f);
+}
+function micState(){const d=$('micDot');d.className=MIC.active?'live':MIC.ok?'ok':'';}
+const FLBL={tac:'Air Tac',vhf:'122.925',rv:'Rotor Victor',neu:'NEU West',cdf:'A/G 3',tac2:'Tac 2',guard:'Guard'};
+function flbl(f){return FLBL[f]||f;}
+function selectFreq(f){S.selFreq=f;document.querySelectorAll('.key').forEach(k=>k.classList.toggle('sel',k.dataset.f===f));
+  $('typed').placeholder=`Type a call on ${flbl(f)} and press Enter`;}
+function kd(f){
+  try{getACX().resume();}catch(e){}
+  selectFreq(f);
+  if(!S.launched||MIC.active)return;
+  if(!MIC.ok){const t=$('typed');t.focus();
+    $('heard').textContent=`${flbl(f)} selected — ${dictationHow()} and speak, then Enter.`;$('heard').classList.add('live');return;}
+  if(S.pending)clearPending();
+  MIC.active=true;MIC.freq=f;MIC.pending='';MIC.acc='';
+  document.querySelector(`.key[data-f="${f}"]`).classList.add('tx');
+  $('heard').textContent=`Transmitting on ${flbl(f)}…`;$('heard').classList.add('live');micState();
+  if(!recogRunning)startRecog();
+}
+function ku(f){
+  const k=document.querySelector(`.key[data-f="${f}"]`);if(k)k.classList.remove('tx');
+  if(!MIC.active||MIC.freq!==f)return;
+  $('heard').textContent='…';
+  setTimeout(()=>{const txt=MIC.pending;MIC.active=false;MIC.freq=null;MIC.pending='';MIC.acc='';micState();
+    if(txt){S.emptyHeard=0;if(S.review)setPending(txt,f);else processXmit(txt,f);}
+    else{S.emptyHeard++;
+      if(S.emptyHeard>=4){micUnavailable('Nothing has come through the microphone on the last four tries.',true);}
+      else{$('heard').textContent='Nothing heard — hold the key a beat longer and speak clearly.';$('heard').classList.remove('live');}}},450);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  LOG, PROMPTS, SCORE
+// ════════════════════════════════════════════════════════════════════
+function fmt(s){return [Math.floor(s/60),s%60].map(n=>String(n).padStart(2,'0')).join(':');}
+function addLog(cs,msg,type){
+  const el=document.createElement('div');el.className='le '+(type||'sys');
+  el.innerHTML=`<span class="tm">${fmt(S.elapsed)}</span><span class="cs"></span><span class="m"></span>`;
+  el.querySelector('.cs').textContent=cs||'';el.querySelector('.m').textContent=msg;
+  const L=$('log');L.appendChild(el);while(L.children.length>160)L.removeChild(L.firstChild);L.scrollTop=L.scrollHeight;
+}
+function dbg(m){if(DEBUG)addLog('',m,'sys');}
+function setNextStep(m){$('nextStep').textContent=m||'';$('nextStep').style.display=(S.hints&&m)?'block':'none';}
+let promptToken=0;
+function showPromptRaw(from,msg){
+  if(!S.hints)return;$('pFrom').textContent=from;$('pMsg').textContent=msg;$('prompt').classList.add('show');
+  const tk=++promptToken;after(30,()=>{if(tk===promptToken)hidePrompt();});
+}
+function showPrompt(ac,msg){showPromptRaw(`${ac.spokenCS} is waiting on you`,msg);}
+function hidePrompt(){$('prompt').classList.remove('show');}
+let legTimer=null;
+function flashLeg(text,color){const b=$('legBanner');b.textContent=text;b.style.background=color;b.style.display='block';
+  clearTimeout(legTimer);legTimer=setTimeout(()=>{b.style.display='none';},2600);}
+function adjustScore(bucket,delta,reason){
+  S.score[bucket]=(S.score[bucket]||0)+delta;
+  S.score.total=Math.max(0,S.score.blind+S.score.timing+S.score.freq+S.score.ops);
+  if(reason)S.score.ledger.push({t:S.elapsed,delta,reason});
+  $('vSc').textContent=S.score.total;
+}
+function inPattern(){return S.aircraft.some(a=>a.role==='tanker'&&a.onCanvas&&['maneuvering','on_final','dropping'].includes(a.status));}
+function setAwaiting(ac){
+  const busy=S.aircraft.find(a=>a.role==='tanker'&&['maneuvering','on_final'].includes(a.status));
+  if(busy&&busy!==ac){if(!S.awaitingQueue.includes(ac))S.awaitingQueue.push(ac);return;}
+  S.awaitingAC=ac;showPrompt(ac,hintFor(ac));
+}
+function clearAwaiting(ac){
+  if(S.awaitingAC!==ac&&ac)return;S.awaitingAC=null;
+  if(S.awaitingQueue.length)after(1.5,()=>{const n=S.awaitingQueue.shift();if(n&&n.onCanvas){S.awaitingAC=n;showPrompt(n,hintFor(n));}});
+}
+function hintFor(ac){
+  const cs=ac.spokenCS,head=dirName((S.wx.dir+180)%360);
+  if(ac.status==='inbound'||ac.status==='waiting_clearance'){
+    const n=S.aircraft.filter(a=>a!==ac&&a.role===ac.role&&['orbit','maneuvering','on_final','dropping'].includes(a.status)).length;
+    return `"${cs}, altimeter 30.02, you're cleared in at ${ac.role==='heli'?'2,000':'3,000'}${n?`, number ${n+1}`:''}. Air Attack is at 4,000. No visible hazards."`;
+  }
+  if(ac.status==='orbit'){
+    if(ac.role==='heli')return `"${cs}, work the right flank, dip Pilgrim Pond southwest of the fire. Hard ceiling 1,000 feet."`;
+    if(S.windShifted)return `"${cs}, the head is running ${head} toward the structures. Your drop is the head, between the fire and the homes on Ridgeline, coverage level 6, full load. Exit away from the head, maintain 3,500."\nThen: "${cs}, cleared to maneuver."`;
+    return `"${cs}, the head is running ${head}. Your drop is the left flank, tie in to the head, coverage level 4, full load. Exit away from the head, maintain 3,500."\nThen: "${cs}, cleared to maneuver."`;
+  }
+  if(ac.status==='on_final')return `"${cs}, I have your final, you are clear to drop."`;
+  if(ac.status==='maneuvering'&&ac.currentLeg)return `"${cs}, I have your ${ac.currentLeg}."`;
+  return `"${cs}, Air Attack 230."`;
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  PARSERS
+// ════════════════════════════════════════════════════════════════════
+function parseSpokenAlt(s){const d=s.match(/\b([1-9])[,\s]?(\d{3})\b/);if(d)return parseInt(d[1]+d[2]).toLocaleString();
+  const w=[['thirty five hundred','3,500'],['three thousand five hundred','3,500'],['three thousand','3,000'],['four thousand','4,000'],
+    ['two thousand','2,000'],['fifteen hundred','1,500'],['twenty five hundred','2,500'],['five thousand','5,000']];
+  for(const [k,v] of w)if(s.replace(/-/g,' ').includes(k))return v;return null;}
+function parseSpokenAltim(s){const d=s.match(/\b(2[89]|30)\.\d{1,2}\b/);if(d)return d[0];
+  if(/thirty\s+zero\s+two|30\s+02|three\s+zero\s+zero\s+two/.test(s))return '30.02';
+  if(/twenty\s+nine\s+nine\s+two|29\s+92/.test(s))return '29.92';return null;}
+function parseAssignment(lc){
+  if(/left\s*flank|left\s*side/.test(lc))return 'left';
+  if(/right\s*flank|right\s*side/.test(lc))return 'right';
+  if(/\bthe\s*head\b|across\s*the\s*head|pinch\s*the\s*head|at\s*the\s*head/.test(lc)&&!/tie\s*(in\s*)?(in)?to\s*the\s*head/.test(lc))return 'head';
+  if(/\bthe\s*heel\b/.test(lc))return 'heel';
+  return null;}
+function parseBrief(lc){
+  const b={};let m=lc.match(/coverage\s*(?:level\s*)?(\d+)/);if(m)b.coverage=m[1];
+  if(/full\s*load/.test(lc))b.load='full load';else if(/half\s*load/.test(lc))b.load='half load';else if(/split\s*load/.test(lc))b.load='split load';
+  if(/tie\s*(?:in\s*)?(?:in)?to\s*the\s*head|tie\s*in\s*(?:at|with)\s*the\s*head/.test(lc))b.tie='tie in to the head';
+  else if(/tie\s*(?:in\s*)?(?:in)?to\s*the\s*(?:road|black|anchor)/.test(lc))b.tie='tie in to the anchor';
+  m=lc.match(/(?:exit|maintain|climb\s*to)\D{0,14}([1-9][,\s]?\d{3})/);if(m)b.exit=m[1].replace(/[,\s]/g,'');
+  if(/power\s*line/.test(lc))b.hazard='power lines';else if(/tower/.test(lc))b.hazard='the tower';
+  return b;}
+function asnLabel(a){return {left:'left flank',right:'right flank',head:'the head',heel:'the heel'}[a]||a;}
+function applyBrief(ac,b){ac.brief={...(ac.brief||{}),...b};
+  const cov=parseInt(ac.brief.coverage)||4;ac.dropLen=Math.round(160+1100/clamp(cov,1,8));ac.dropW=34+clamp(cov,1,8)*4;
+  if(ac.brief.load==='half load'||ac.brief.load==='split load')ac.dropLen=Math.round(ac.dropLen*.55);
+  if(ac.id==='t90')ac.dropLen=Math.round(ac.dropLen*.75);}
+function briefReadback(cs,asn,b){const p=[];if(asn)p.push(asnLabel(asn));if(b.tie)p.push(b.tie);
+  if(b.coverage)p.push('coverage level '+b.coverage);if(b.load)p.push(b.load);
+  if(b.exit)p.push(Number(b.exit).toLocaleString()+' on the exit');if(b.hazard)p.push('copy '+b.hazard);
+  return p.length?`${cs} copies — ${p.join(', ')}. I have the drop.`:`${cs} — I have the drop.`;}
+function acMatch(ac,lc){
+  const extra={t88:['tanker 88','tanker 8 8','tanker eight eight','tanker eighty eight','tanker 8-8','tank 88','tanker88'],
+    t89:['tanker 89','tanker 8 9','tanker eight nine','tanker eighty nine','tanker 8-9','tank 89','tanker89'],
+    t90:['tanker 90','tanker 9 0','tanker nine zero','tanker ninety'],
+    h5bt:['copter 5 bravo tango','copter five bravo tango','helicopter 5 bravo tango','5 bravo tango','five bravo tango','bravo tango','copter 5','copter five','helicopter 5','helicopter five','heli 5','chopper 5'],
+    h2bk:['copter 2 bravo kilo','helicopter 2 bravo kilo','bravo kilo','2 bravo kilo','copter 2','helicopter 2']}[ac.id]||[];
+  if([ac.sn,ac.callsign.toLowerCase(),...extra].some(s=>lc.includes(s)))return true;
+  const fz={t88:/(tanker|tinker|banker|tank)\w*.{0,8}(\b88\b|8\s?8|eight\s?eight|eighty\s?eight)/,
+    t89:/(tanker|tinker|banker|tank)\w*.{0,8}(\b89\b|8\s?9|eight\s?nine|eighty\s?nine)/,
+    t90:/(tanker|tinker|banker|tank)\w*.{0,8}(\b90\b|9\s?0|nine\s?zero|ninety)/,
+    h5bt:/(helicopter|heli|copter|chopper)\w*.{0,12}(\b5\b|five|bravo\s*tango)/,
+    h2bk:/(helicopter|heli|copter|chopper)\w*.{0,12}(\b2\b|two|kilo)/}[ac.id];
+  return fz?fz.test(lc):false;}
+</script>
+<script>
+// ════════════════════════════════════════════════════════════════════
+//  TRANSMISSIONS
+// ════════════════════════════════════════════════════════════════════
+function processXmit(text,freq){
+  if(!text||!S.launched)return;
+  addLog(`AA230 on ${flbl(freq)}`,text,'me');
+  $('heard').textContent=text;$('heard').classList.remove('live');
+  const lc=text.toLowerCase().replace(/[,!?;:]/g,' ').replace(/\.(?!\d)/g,' ').replace(/\s+/g,' ').trim();
+
+  if(S.blindPhase){
+    const named=S.aircraft.some(a=>a.onCanvas&&acMatch(a,lc));
+    if(!(named&&/\bclear|altimeter|\bhold\b|maneuv|drop/.test(lc))){recordCall(text,freq);return;}
+  }
+  if(/end\s*(the\s*)?(exercise|drill|sim)|terminate\s*(the\s*)?exercise/.test(lc)){showSummary();return;}
+
+  if(freq==='tac2'){addLog('','Tac 2 — no resources assigned on this frequency.','sys');return;}
+  if(freq==='guard'){addLog('','Guard is for emergencies. Work your aircraft on Air Tac.','sys');adjustScore('freq',-1,'non-emergency traffic on Guard');return;}
+  if(freq==='cdf'){engineTraffic(lc);return;}
+  if(freq==='neu'){neuTraffic(lc);return;}
+
+  const c={};
+  c.drop=/clear(ed)?\s*(to|for)\s*(the\s*)?drop|clear(ed)?\s+drop|drop\s+(is\s+)?(approved|cleared)|lines?\s+(are\s+|is\s+)?clear|cleared\s+hot/.test(lc);
+  c.clearStrong=!c.drop&&(/\bclear(ed)?\s+in(to)?\b/.test(lc)||/\baltimeter\b[^.]*\d/.test(lc)||/\bclear(ed)?\s+(at|to)\s+\d/.test(lc));
+  c.maneuver=!c.drop&&!c.clearStrong&&(/maneuver|maneuvre|maneuv|manure|man.ver|menu.ver|man.over|manuver|manoover/.test(lc)||
+    (!/maintain/.test(lc)&&/clear.*to.*man|proceed.*man|fly.*pattern|run.*pattern/.test(lc)));
+  c.clear=!c.drop&&!c.maneuver&&(c.clearStrong||/you.re\s+cleared|you\s+are\s+cleared|cleared\s+inbound|clear\s+to\s+enter|you.re\s+in\s+at|come\s+in\s+at|enter\s+at|descend\s+and\s+maintain/.test(lc));
+  c.hold=/\bhold\b|stand\s*by/.test(lc);
+  c.resume=/\bcontinue\b|\bresume\b|back\s+to\s+work|press\s+on/.test(lc);
+  c.brief=/coverage|left\s*flank|right\s*flank|tie\s*in|the\s*head|the\s*heel|full\s*load|half\s*load|split\s*load/.test(lc);
+  dbg(`heard "${lc}" drop=${c.drop} clear=${c.clear} man=${c.maneuver} brief=${c.brief}`);
+
+  let targets=S.aircraft.filter(a=>a.onCanvas&&acMatch(a,lc));
+  if(!targets.length){
+    const onFinal=S.aircraft.filter(a=>a.onCanvas&&a.role==='tanker'&&(a.status==='on_final'||a.status==='maneuvering'));
+    const waiting=S.aircraft.filter(a=>a.onCanvas&&(a.status==='inbound'||a.status==='waiting_clearance'));
+    if(c.drop&&onFinal.length===1)targets=onFinal;
+    else if(c.clear&&waiting.length===1)targets=waiting;
+    else if((c.drop||c.maneuver||c.clear||c.brief)&&S.awaitingAC&&S.awaitingAC.onCanvas)targets=[S.awaitingAC];
+    if(targets.length)addLog('',`Callsign unclear — taken as ${targets[0].spokenCS}.`,'sys');
+    else{
+      const act=S.aircraft.filter(a=>a.onCanvas).map(a=>a.spokenCS).join(', ');
+      addLog('',`No callsign recognised. Say it clearly${act?` — on frequency: ${act}`:''}.`,'sys');return;
+    }
+  }
+  if(freq==='vhf')adjustScore('freq',-1,'tactical traffic on 122.925 — use Air Tac');
+  targets.forEach(ac=>handleAC(ac,lc,c));
+
+  if(/load\s*and\s*return|good\s*(start|line|drop)|short|long|half\s*load|late|early|in\s*the\s*black|nice\s*drop/.test(lc)){
+    targets.filter(a=>a.status==='returning'&&!a._critiqued).forEach(ac=>{
+      ac._critiqued=true;hidePrompt();
+      let reply=`${ac.spokenCS} copies, load and return.`;
+      if(/short/.test(lc))reply=`${ac.spokenCS} copies, dropped short, will adjust next load.`;
+      else if(/long/.test(lc))reply=`${ac.spokenCS} copies, long on that one, will adjust.`;
+      else if(/black/.test(lc))reply=`${ac.spokenCS} copies, in the black, will push it out next load.`;
+      else if(/good|nice/.test(lc))reply=`${ac.spokenCS} copies, thanks, load and return.`;
+      rtx(ac.callsign,reply,'rx',ac.role,'tac');adjustScore('ops',2,'drop critique given');
+    });
+  }
+}
+
+function handleAC(ac,lc,c){
+  const cs=ac.spokenCS,r=ac.role,tag=r==='heli'?'heli':'rx',fq=r==='heli'?'rv':'tac';
+  const say=m=>rtx(ac.callsign,m,tag,r,fq);
+
+  // 1 — drop clearance
+  if(c.drop&&r==='tanker'){
+    if(ac.status==='maneuvering'||ac.status==='on_final'){
+      if(ac.cleared)return;
+      ac.cleared=true;hidePrompt();clearAwaiting(ac);
+      adjustScore('ops',ac.status==='on_final'?4:2,`${ac.short} cleared to drop`);
+      say(`${cs}, cleared to drop.`);flashLeg(`${ac.short} cleared to drop`,'#8a1a24');
+      setNextStep(`${ac.short} is cleared — watch the run`);return;
+    }
+    if(ac.status==='orbit'){say(`${cs} — not in the pattern yet. Need clearance to maneuver.`);return;}
+  }
+  // 2 — leg acknowledgements
+  if(r==='tanker'&&(ac.status==='maneuvering'||ac.status==='on_final')&&!c.maneuver&&/have\s*your|downwind|\bbase\b|final|copy/.test(lc)){
+    ac._acked=ac._acked||{};const leg=ac.currentLeg||'leg';
+    if(!ac._acked[leg]){ac._acked[leg]=1;adjustScore('timing',1,`${leg} acknowledged`);}
+    hidePrompt();clearAwaiting(ac);
+    if(ac.status==='on_final')setNextStep(`"${cs}, you are clear to drop."`);
+    return;
+  }
+  // 3 — clearance into the fire traffic area (forgiving: speech garbles these)
+  if(ac.status==='inbound'||ac.status==='waiting_clearance'){
+    const explicitHold=c.hold&&!/\bclear(ed)?\s+in(to)?\b|you.re\s+cleared|you\s+are\s+cleared/.test(lc);
+    const looks=!explicitHold&&(c.clear||/\baltimeter\b/.test(lc)||/\bclear/.test(lc)||(!c.brief&&(/\b[1-9][,\s]?\d{3}\b/.test(lc)||/thousand|hundred/.test(lc))));
+    if(looks){clearIn(ac,lc);return;}
+    if(explicitHold){ac.status='waiting_clearance';say(`${cs} copies, holding outside.`);return;}
+  }
+  // 4 — cleared to maneuver
+  if(c.maneuver&&r==='tanker'){
+    if(ac.status==='inbound'||ac.status==='waiting_clearance'){say(`${cs} — unable, not cleared into the fire traffic area.`);return;}
+    if(ac.status==='returning'){say(`${cs} — unable, we're empty.`);return;}
+    if(ac.status==='orbit'){
+      const asn=parseAssignment(lc),bd=parseBrief(lc);
+      if(asn)ac.assignment=asn;if(Object.keys(bd).length){applyBrief(ac,bd);ac.briefed=true;}
+      if(!ac.assignment)ac.assignment='left';
+      if(!ac.briefed&&S.hints)addLog('',`${ac.short} wasn't briefed — defaulting to the left flank.`,'sys');
+      ac.status='maneuvering';ac.currentLeg='';hidePrompt();clearAwaiting(ac);
+      adjustScore('ops',2,'cleared to maneuver');markP('p4');
+      say(`${cs}, cleared to maneuver, ${asnLabel(ac.assignment)}.`);
+      setNextStep(`${ac.short} is maneuvering — acknowledge each leg`);
+      startPattern(ac);return;
+    }
+  }
+  // 5 — helicopter tasking
+  if(r==='heli'&&ac.status==='orbit'&&(c.brief||c.maneuver||/dip|bucket|pond/.test(lc))){
+    ac.assignment=parseAssignment(lc)||ac.assignment||'right';
+    const bd=parseBrief(lc),parts=[asnLabel(ac.assignment)];if(bd.hazard)parts.push('copy '+bd.hazard);
+    say(`${cs} copies — ${parts.join(', ')}. Dipping Pilgrim Pond, will call dips and drops.`);
+    ac.status='maneuvering';markP('p3');markP('p4');adjustScore('ops',2,'rotor tactical brief');hidePrompt();clearAwaiting(ac);
+    heliCycle(ac);return;
+  }
+  if(r==='heli'&&c.hold&&ac.status==='maneuvering'&&!ac.held){
+    ac.held=true;heliHold(ac);
+    if(inPattern())adjustScore('ops',2,'rotor traffic held for tanker drop');
+    say(`${cs} copies, holding at the pond.`);return;
+  }
+  if(r==='heli'&&c.resume&&ac.held){ac.held=false;say(`${cs} copies, back to work.`);heliCycle(ac);return;}
+  // 6 — tactical brief / re-brief
+  if(c.brief&&r==='tanker'){
+    const asn=parseAssignment(lc),bd=parseBrief(lc);
+    if(['orbit','inbound','waiting_clearance','returning'].includes(ac.status)){
+      if(asn)ac.assignment=asn;applyBrief(ac,bd);ac.briefed=true;
+      const detail=(bd.coverage?1:0)+(bd.load?1:0)+(bd.tie?1:0)+(bd.exit?1:0);
+      say(briefReadback(cs,asn||ac.assignment,bd));
+      adjustScore('ops',2+Math.min(3,detail),'tactical brief'+(detail?` (${detail} specifics)`:''));
+      if(!detail&&S.hints)addLog('','Thin brief — include coverage level, load, what to tie in to, and an exit altitude.','sys');
+      if(S.windShifted&&!S.windRebriefed&&asn&&S.elapsed-S.windShiftAt<180){S.windRebriefed=true;adjustScore('ops',3,'re-briefed after the wind shift');}
+      markP('p3');hidePrompt();clearAwaiting(ac);
+      if(ac.status==='orbit')after(2,()=>{if(ac.status==='orbit'){showPrompt(ac,`"${cs}, cleared to maneuver."`);setNextStep(`Clear ${ac.short} to maneuver`);}});
+      return;
+    }
+  }
+  // 7 — status
+  const st={inbound:'inbound, 12 miles.',waiting_clearance:'holding outside, 7 miles.',orbit:'established.',
+    maneuvering:r==='heli'?(ac.held?'holding at the pond.':'working the bucket.'):`on the ${ac.currentLeg||'pattern'}.`,
+    on_final:'on final.',dropping:'on the drop.',returning:'empty, headed to reload.'}[ac.status];
+  if(st)say(`${cs} — ${st}`);
+}
+function clearIn(ac,lc){
+  const cs=ac.spokenCS,alt=parseSpokenAlt(lc)||(ac.role==='heli'?'2,000':'3,000'),altim=parseSpokenAltim(lc)||'30.02';
+  const n=S.aircraft.filter(a=>a!==ac&&a.role===ac.role&&['orbit','maneuvering','on_final','dropping'].includes(a.status)).length;
+  const haz=/power\s*line/.test(lc)?'copy power lines':/tower/.test(lc)?'copy the tower':'no visible hazards';
+  ac.status='orbit';ac._established=false;routeOrbit(ac);hidePrompt();clearAwaiting(ac);markP('p1');
+  adjustScore('ops',2,`${ac.short} cleared in`);
+  if(ac.checkInT!==undefined&&S.elapsed-ac.checkInT<25)adjustScore('timing',1,'prompt clearance');
+  rtx(ac.callsign,`${cs} copies — cleared in at ${alt}${n?`, number ${n+1}`:''}, altimeter ${altim}, ${haz}. ${cs}.`,ac.role==='heli'?'heli':'rx',ac.role,ac.role==='heli'?'rv':'tac');
+  if(!S.conditionsReported&&!S.neuReminded){S.neuReminded=true;addLog('','NEU West still needs your at-scene report when you get a chance.','sys');}
+  setNextStep(`Brief ${ac.short} once established`);
+}
+
+function engineTraffic(lc){
+  let reply;
+  if(!S.engineAtScene){S.engineAtScene=true;reply='Air Attack 230, Engine 2362, at scene on Ridgeline Road west of the structures. Standing by.';}
+  else if(/clear|advance|proceed|move\s*up|go\s*ahead/.test(lc)&&!S.engineLineCleared){
+    S.engineLineCleared=true;markP('p6');adjustScore('ops',2,'E-2362 cleared to advance');hidePrompt();
+    reply='Engine 2362 copies, advancing east on Ridgeline Road to the structures. Advise when retardant is inbound.';}
+  else if(/hold|stand\s*by|negative|stay/.test(lc))reply='Engine 2362 copies, holding west of the structures.';
+  else if(/retardant|drop|tanker/.test(lc))reply='Engine 2362 copies retardant, we\u2019re clear of the drop.';
+  else reply='Engine 2362 copies.';
+  after(1.4,()=>rtx('ENGINE 2362',reply,'gnd','ground','cdf'));
+}
+function neuTraffic(lc){
+  const report=/acres|timber|understory|brush|grass|rate|spread|flank|threat|structure|midslope|assuming/.test(lc);
+  if(S.conditionsReported&&S.fbDue&&/acres|rate|spread|behavior|contain|update/.test(lc)){
+    const quick=S.elapsed-S.fbDue<90;S.fbDue=0;markP('p7');adjustScore('ops',2,'fire behavior update');
+    if(quick)adjustScore('timing',1,'update within 90 seconds');
+    after(1.4,()=>rtx('NEU WEST','Air Attack 230, NEU West copies your update.','dsp','dispatch','neu'));return;
+  }
+  if(report&&!S.conditionsReported){
+    S.conditionsReported=true;markP('p2');adjustScore('ops',4,'at-scene report to NEU West');
+    after(1.6,()=>{
+      rtx('NEU WEST','Air Attack 230, NEU West copies your Cedar Fire. Tanker 88 and Tanker 89 assigned, Copter 5 Bravo Tango en route. You are Cedar Air Attack.','dsp','dispatch','neu');
+      S.aircraft.filter(a=>a.onCanvas&&(a.status==='inbound'||a.status==='waiting_clearance')).forEach((a,i)=>{
+        a._nextCall=S.opsElapsed+45+i*7;
+        after(7+i*7,()=>{if(a.status!=='inbound'&&a.status!=='waiting_clearance')return;
+          rtx(a.callsign,`Cedar Air Attack, ${a.spokenCS} — ${a.status==='inbound'?'12 miles':'7 miles, holding outside'}, request clearance into the fire traffic area.`,a.role==='heli'?'heli':'rx',a.role,a.role==='heli'?'rv':'tac');
+          after(1.6,()=>{if(a.status==='inbound'||a.status==='waiting_clearance')setAwaiting(a);});});
+      });
+    });
+    setNextStep('');return;
+  }
+  if(S.conditionsReported){after(1.4,()=>rtx('NEU WEST','NEU West copies.','dsp','dispatch','neu'));return;}
+  after(1.4,()=>rtx('NEU WEST','Air Attack 230, NEU West, go ahead with your conditions report.','dsp','dispatch','neu'));
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  BLIND CALLS & CRITIQUE
+// ════════════════════════════════════════════════════════════════════
+function recordCall(text,freq){
+  S.blindCalls.push({text,freq,t:S.elapsed});
+  if(freq in S.blindFreqCount){S.blindFreqCount[freq]++;if(S.blindFreqCount[freq]<=2)adjustScore('blind',2,`blind call on ${flbl(freq)}`);}
+  const n=f=>Math.min(S.blindFreqCount[f],2);
+  [['tac',1],['tac',2],['vhf',1],['vhf',2],['rv',1],['rv',2]].forEach(([f,k],i)=>$('bd'+(i+1)).classList.toggle('on',S.blindFreqCount[f]>=k));
+  if(freq==='vhf'&&S.blindFreqCount.vhf===1)after(3.6,()=>rtx('N412SP','Air Attack 230, November 4 1 2 Sierra Papa, light aircraft 8 miles southeast of the Cedar Fire at 4,500, westbound. Will remain clear of the fire traffic area.','dsp','dispatch','vhf'));
+  if(n('tac')+n('vhf')+n('rv')>=6&&!S.critiqueShown){adjustScore('blind',4,'all six blind calls');S.blindPhase=false;after(2.5,showCritique);}
+}
+function showCritique(){
+  if(S.critiqueShown)return;S.critiqueShown=true;
+  const all=S.blindCalls.map(x=>x.text.toLowerCase()).join(' '),has=(...k)=>k.some(w=>all.includes(w));
+  const items=[
+    [has('any aircraft','all aircraft'),'Addressed all aircraft','Open with “Any aircraft responding to or at scene of the Cedar Fire.”'],
+    [has('cedar'),'Named the incident','Include the incident name so aircraft not yet on frequency can place you.'],
+    [has('air attack'),'Gave your callsign','Identify as Air Attack 230 on every blind call.'],
+    [/\b[1-9]\d{3}\b|thousand|hundred/.test(all),'Gave your altitude','Altitude lets inbound aircraft find you and set vertical separation.'],
+    [has('12 mile','twelve mile')&&has('7 mile','seven mile'),'Called at 12 and 7 miles','One call at 12 miles and one at 7 on each frequency.'],
+    [has('identify','air tac','122.925','rotor victor'),'Said where to answer','Close with the frequency aircraft should identify on.'],
+    [S.blindFreqCount.tac>=2,'Two calls on Air Tac',`${S.blindFreqCount.tac} of 2 made.`],
+    [S.blindFreqCount.vhf>=2,'Two calls on 122.925',`${S.blindFreqCount.vhf} of 2 made.`],
+    [S.blindFreqCount.rv>=2,'Two calls on Rotor Victor',`${S.blindFreqCount.rv} of 2 made.`]];
+  $('critBody').innerHTML=items.map(([ok,t,d])=>`<div class="ci ${ok?'pass':'fail'}"><i>${ok?'✓':'!'}</i><div><b>${t}</b><em>${d}</em></div></div>`).join('')+
+    `<div class="mlabel">Model 12-mile call</div><div class="model">“Any aircraft responding to or at scene of the Cedar Fire, Air Attack 230, 12 miles north at 4,000. Identify on Air Tactics.” Repeat on 122.925 and Rotor Victor.</div>
+     <div class="mlabel">Model at-scene report to NEU West</div><div class="model">“NEU West, Air Attack 230 at scene Cedar Fire. 10 acres in timber understory, midslope, dangerous rate of spread with wind and slope. Structures threatened on Ridgeline Road. Potential for 100 acres. Assuming Cedar Air Attack.”</div>`;
+  $('crit').classList.add('show');
+}
+function beginOps(){
+  $('crit').classList.remove('show');$('blindBar').classList.remove('show');
+  S.blindPhase=false;S.critiqueShown=true;S.opsActive=true;S.opsElapsed=0;markP('p0');
+  setNextStep('Tankers are coming up on Air Tac — clear them in when they call');
+  addLog('','Operations. Aircraft will call you on frequency.','sys');
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  OPERATIONS — once a second
+// ════════════════════════════════════════════════════════════════════
+function spawnAC(ac){
+  ac.spawned=true;
+  const b=compassToTheta(rnd()*360);placeAt(ac,b,WORLD.spawnR,FIRE_H+1000);
+  ac.onCanvas=true;ac.obj.visible=true;ac.status='inbound';routeHold(ac);
+  const where=dirName(thetaToCompass(b)),fq=ac.role==='heli'?'rv':'tac';
+  const go=()=>{
+    if(inPattern()){after(3,go);return;}
+    rtx(ac.callsign,`Cedar Air Attack, ${ac.spokenCS} — up on ${ac.role==='heli'?'Rotor Victor':'Air Tactics 4'}, 12 miles to the ${where}, request altimeter and cleared altitude.`,ac.role==='heli'?'heli':'rx',ac.role,fq);
+    ac.checkInT=S.elapsed;ac._nextCall=S.opsElapsed+40;
+    after(1.8,()=>{if(ac.status==='inbound'||ac.status==='waiting_clearance')setAwaiting(ac);});
+  };
+  after(.8,go);
+}
+function opsTick(){
+  S.opsElapsed++;
+  S.aircraft.forEach(ac=>{if(!ac.spawned&&ac.arrDelay!==undefined&&S.opsElapsed>=ac.arrDelay)spawnAC(ac);});
+  S.aircraft.forEach(ac=>{
+    if(!ac.onCanvas)return;
+    const d=Math.hypot(ac.pos.x,ac.pos.z),cs=ac.spokenCS,tag=ac.role==='heli'?'heli':'rx',fq=ac.role==='heli'?'rv':'tac';
+    if(ac.status==='inbound'&&d<WORLD.holdR+240&&!ac._held7){
+      ac._held7=true;ac.status='waiting_clearance';ac._nextCall=S.opsElapsed+40;
+      rtx(ac.callsign,`Cedar Air Attack, ${cs} — 7 miles, holding outside.`,tag,ac.role,fq);
+      after(1.6,()=>{if(ac.status==='waiting_clearance')setAwaiting(ac);});
+    }
+    if((ac.status==='inbound'||ac.status==='waiting_clearance')&&ac._nextCall!==undefined&&S.opsElapsed>=ac._nextCall){
+      if(inPattern()){ac._nextCall=S.opsElapsed+10;}
+      else{ac._nextCall=S.opsElapsed+40;
+        rtx(ac.callsign,`Cedar Air Attack, ${cs} — ${ac.status==='inbound'?'12 miles':'holding outside at 7 miles'}, standing by for clearance.`,tag,ac.role,fq);
+        after(1.5,()=>{if(ac.status==='inbound'||ac.status==='waiting_clearance')setAwaiting(ac);});}
+    }
+    if(ac.status==='orbit'&&!ac._established&&Math.abs(d-ac.orbitR)<170){
+      ac._established=true;rtx(ac.callsign,`${cs} — established.`,tag,ac.role,fq);
+      after(2,()=>{if(ac.status==='orbit'){setAwaiting(ac);setNextStep(`Brief ${ac.short} on the drop`);}});
+    }
+  });
+  if(!S.engineAsked&&!S.engineLineCleared&&S.opsElapsed>=150){
+    S.engineAsked=true;S.engineAtScene=true;
+    rtx('ENGINE 2362','Air Attack 230, Engine 2362, we have a good anchor on Ridgeline Road west of the structures. Requesting to advance east along the road to protect the homes.','gnd','ground','cdf');
+    after(1,()=>{showPromptRaw('Engine 2362 is waiting on you','On A/G 3: "Engine 2362, Air Attack 230, line is clear, you\u2019re clear to advance." — or hold them if a drop is coming.');
+      setNextStep('Answer E-2362 on A/G 3');});
+  }
+  if(S.conditionsReported){S.fbTimer++;if(S.fbTimer>=300){S.fbTimer=0;S.fbDue=S.elapsed||1;
+    rtx('NEU WEST','Air Attack 230, NEU West, requesting an updated size and fire behavior when able.','dsp','dispatch','neu');
+    setNextStep('Give NEU West an update — acres, rate of spread, containment');}}
+  if(!S.windShifted&&S.opsElapsed>=360){
+    S.windShifted=true;S.windShiftAt=S.elapsed;S.wx.dir=(S.wx.dir+315)%360;S.wx.wind=Math.min(30,S.wx.wind+3);
+    rtx('ENGINE 2362','Air Attack 230, Engine 2362, wind\u2019s come around out of the south and it\u2019s gusting. Fire\u2019s making a run north toward the structures on Ridgeline.','gnd','ground','cdf');
+    flashLeg('Wind shift — head now running north','#6a4508');
+    setNextStep('Re-brief your tankers onto the new head');
+    addLog('','The head has turned toward the homes. Re-brief tankers with a new assignment.','sys');
+  }
+}
+function secondTick(){
+  S.elapsed++;
+  const st=fireStats();S.lastStats=st;
+  if(S.launched)burnTick();
+  if(st.acres>300&&S.incLevel>2)S.incLevel=2;if(st.acres>800&&S.incLevel>1)S.incLevel=1;
+  S.wx.wind=clamp(S.wx.wind+(Math.random()-.5)*.25,6,30);
+  renderGauges(st);renderAC();
+  if(S.opsActive)opsTick();
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  UI
+// ════════════════════════════════════════════════════════════════════
+const PROC_DEFS=[['p0','Blind calls complete'],['p1','Aircraft cleared into the FTA'],['p2','At-scene report to NEU West'],
+  ['p3','Tactical brief issued'],['p4','Cleared to maneuver'],['p5','Clear to drop on final'],['p6','E-2362 cleared to advance'],['p7','Fire behavior update']];
+function markP(id){const p=S.procedures.find(p=>p.id===id);if(p&&!p.done){p.done=true;renderProcs();}}
+function renderProcs(){$('procs').innerHTML=S.procedures.map(p=>`<div class="pi${p.done?' done':''}"><i>${p.done?'✓':'○'}</i>${p.text}</div>`).join('');}
+function renderGauges(st){
+  $('vAc').textContent=Math.round(st.acres);$('vCt').textContent=Math.round(st.contain)+'%';
+  $('vWd').textContent=`${dirAbbr(S.wx.dir)} ${Math.round(S.wx.wind)}`;$('gWind').classList.toggle('warn',S.windShifted&&S.elapsed-S.windShiftAt<60);
+  $('incType').textContent='Type '+S.incLevel;$('vSc').textContent=S.score.total;
+}
+const ST_LBL={inbound:['12 mi',''],waiting_clearance:['holding','hot'],orbit:['orbit','on'],maneuvering:['pattern','hot'],on_final:['final','hot'],dropping:['dropping','drop'],returning:['reloading','']};
+function renderAC(){
+  $('acList').innerHTML=S.aircraft.filter(a=>a.spawned).map(a=>{
+    let [l,c]=ST_LBL[a.status]||['—',''];
+    if(a.role==='heli'&&a.status==='maneuvering')[l,c]=a.held?['held at pond','hot']:['bucket work','on'];
+    if(a.status==='maneuvering'&&a.currentLeg)l=a.currentLeg;
+    return `<div class="acrow"><b style="color:${a.color}">${a.short}</b><span class="acst ${c}">${l}</span></div>`;}).join('')||
+    '<div class="acrow" style="color:var(--dim)">None on frequency yet</div>';
+}
+const GROUND_LBL=[{t:'Ridgeline Rd',x:-1500,z:-528},{t:'Pilgrim Pond',x:POND.x,z:POND.z+230},{t:'E-2362',x:ENGINE.x,z:ENGINE.z-70},{t:'Structures',x:-105,z:-540}];
+const lblEls={};
+function lblEl(key,cls){if(!lblEls[key]){const e=document.createElement('div');e.className='lbl '+cls;$('labels').appendChild(e);lblEls[key]=e;}return lblEls[key];}
+const _v=new THREE.Vector3();
+function place(el,x,y,z){
+  _v.set(x,y,z).project(camera);const W=$('app').clientWidth,H=$('app').clientHeight;
+  if(_v.z>1||_v.x<-1.1||_v.x>1.1||_v.y<-1.1||_v.y>1.1){el.style.display='none';return;}
+  el.style.display='block';el.style.left=((_v.x+1)/2*W)+'px';el.style.top=((1-_v.y)/2*H)+'px';
+}
+function updateLabels(){
+  S.aircraft.forEach(a=>{
+    if(!a.onCanvas){a.label.style.display='none';return;}
+    const st=a.status==='on_final'?'final':a.status==='dropping'?'drop':a.status==='maneuvering'&&a.currentLeg?a.currentLeg:a.held?'held':'';
+    const html=`${a.short}${st?`<small>${st}</small>`:''}`;if(a.label._h!==html){a.label.innerHTML=html;a.label._h=html;}
+    place(a.label,a.pos.x,a.pos.y+40,a.pos.z);
+  });
+  GROUND_LBL.forEach((g,i)=>{const e=lblEl('g'+i,'lbl-gnd');if(!S.launched){e.style.display='none';return;}if(e.textContent!==g.t)e.textContent=g.t;place(e,g.x,hAt(g.x,g.z)+30,g.z);});
+  const an=anatomy(),names={head:'Head',heel:'Heel',left:'Left flank',right:'Right flank'};
+  Object.keys(names).forEach(k=>{const e=lblEl('a'+k,'lbl-anat');
+    if(!S.hints||!S.opsActive){e.style.display='none';return;}
+    if(e.textContent!==names[k])e.textContent=names[k];const p=an[k];place(e,p.x,hAt(p.x,p.z)+30,p.z);});
+}
+function setHints(on){
+  S.hints=on;$('hintBtn').setAttribute('aria-pressed',String(on));
+  if(!on){hidePrompt();$('nextStep').style.display='none';}else if($('nextStep').textContent)$('nextStep').style.display='block';
+}
+function reqMore(){
+  if(S.extrasOrdered||!S.launched)return;S.extrasOrdered=true;$('addBtn').disabled=true;$('addBtn').textContent='Ordered';
+  EXTRA_DEFS.forEach((d,i)=>{const ac=acCreate(d);S.aircraft.push(ac);
+    rtx('NEU WEST',`Air Attack 230, NEU West, adding ${d.spokenCS} to the Cedar Fire, about 2 minutes out.`,'dsp','dispatch','neu');
+    after(70+i*25,()=>{if(!ac.spawned)spawnAC(ac);});});
+}
+function showSummary(){
+  const st=fireStats(),saved=houseObjs.filter(h=>!h.lost).length,drops=LINES.filter(l=>l.kind==='ret').length;
+  const tot=S.score.total,rating=tot>=40?'Excellent':tot>=25?'Satisfactory':tot>=12?'Marginal':'Needs work';
+  $('sumTitle').textContent=rating;
+  $('sumLead').textContent=`${fmt(S.elapsed)} on scene. ${saved} of ${houseObjs.length} structures saved.`;
+  const rows=[['Score',tot],['Fire size',Math.round(st.acres)+' acres'],['Contained',Math.round(st.contain)+'%'],
+    ['Retardant and water',S.retDropped.toLocaleString()+' gal'],['Tanker drops',drops],
+    ['Checklist',S.procedures.filter(p=>p.done).length+' of '+S.procedures.length],
+    ['Wind shift re-brief',S.windShifted?(S.windRebriefed?'Done':'Missed'):'Not reached']];
+  $('sumBody').innerHTML=rows.map(([a,b])=>`<div class="row"><span>${a}</span><b>${b}</b></div>`).join('')+
+    `<div class="ledger">${S.score.ledger.slice().reverse().map(l=>`<div><span>${fmt(l.t)} ${l.reason}</span><span class="${l.delta>=0?'p':'n'}">${l.delta>0?'+':''}${l.delta}</span></div>`).join('')}</div>`;
+  $('summary').classList.add('show');
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  LOOP
+// ════════════════════════════════════════════════════════════════════
+function simStep(dt){
+  S.simT+=dt;runTimers();
+  if(S.launched){fireStep(dt);if(S.blindPhase)S.blindT+=dt;}
+  updateCamera(dt);
+  S.aircraft.forEach(a=>acUpdate(a,dt));
+  emitFire(dt);PS.forEach(p=>updatePS(p,dt));
+  LINES.forEach(L=>{L.age=(L.age||0)+dt;});
+  S.secAcc+=dt;while(S.secAcc>=1){S.secAcc-=1;secondTick();}
+}
+function frame(){
+  requestAnimationFrame(frame);
+  const dt=Math.min(clock.getDelta(),.1)*TIMESCALE;
+  simStep(dt);
+  ovTimer+=dt;if(ovTimer>(ovDirty?.07:.22)){ovTimer=0;ovDirty=false;paintOverlay();}
+  const st=S.lastStats||{active:1,acres:10};
+  fireLight.position.set(0,FIRE_H+70,0);fireLight.intensity=(.9+st.active*1.1)*(.85+.15*Math.sin(S.simT*11)+.08*Math.sin(S.simT*23));
+  skyMat.uniforms.smoke.value=clamp(st.acres/500,0,.45);
+  $('hdgV').textContent=String(Math.round(aaHeading)%360).padStart(3,'0')+'°';
+  renderer.render(scene,camera);
+  updateLabels();
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  BOOT
+// ════════════════════════════════════════════════════════════════════
+function step(msg,fn){return new Promise(res=>{$('loadMsg').textContent=msg;setTimeout(()=>{fn();res();},30);});}
+async function boot(){
+  if(!window.THREE){$('launchBtn').textContent='Couldn\u2019t load the 3D engine';$('loadMsg').textContent='Check your connection and reload the page.';return;}
+  POND_H=rawH(POND.x,POND.z)-4;FIRE_H=hAt(0,0);
+  initRenderer();
+  await step('Building terrain…',buildTerrain);
+  await step('Growing timber…',buildTrees);
+  await step('Placing structures…',()=>{buildStructures();buildRings();});
+  await step('Mapping the fire zone…',()=>{buildOverlay();buildParticles();onResize();});
+  fireInit();paintOverlay();
+  S.aircraft=AC_DEFS.map(acCreate);
+  S.procedures=PROC_DEFS.map(([id,text])=>({id,text,done:false}));
+  renderProcs();renderAC();renderGauges(fireStats());
+  $('loadMsg').textContent='';$('launchBtn').disabled=false;$('launchBtn').textContent='Launch';
+  window.addEventListener('resize',onResize);
+  clock.getDelta();requestAnimationFrame(frame);
+}
+function launch(){
+  if(S.launched)return;S.launched=true;
+  $('intro').classList.remove('show');$('blindBar').classList.add('show');
+  try{getACX().resume();}catch(e){}
+  startEngineHum();requestMic();watchMicPermission();
+  S.blindPhase=true;
+  setNextStep('Make your 12-mile blind call on Air Tac, 122.925 and Rotor Victor');
+  setTimeout(()=>dispatchBeeps(()=>rtx('NEU WEST','Air Attack 230, Tanker 88, Tanker 89, Copter 5 Bravo Tango, vegetation fire, Cedar Ridge area off Ridgeline Road. Engine 2362 at scene reporting 10 acres in timber understory, dangerous rate of spread, structures threatened. Air Attack 230, Tanker 88, Tanker 89, Copter 5 Bravo Tango.','dsp','dispatch','neu')),900);
+}
+
+// ── wiring
+$('launchBtn').addEventListener('click',launch);
+$('critBtn').addEventListener('click',beginOps);
+$('skipBtn').addEventListener('click',()=>{S.critiqueShown=true;addLog('','Blind calls skipped.','sys');beginOps();});
+$('sumBtn').addEventListener('click',()=>$('summary').classList.remove('show'));
+$('hintBtn').addEventListener('click',()=>setHints(!S.hints));
+$('addBtn').addEventListener('click',reqMore);
+$('logToggle').addEventListener('click',()=>$('side').classList.toggle('open'));
+document.querySelectorAll('.key').forEach(k=>{
+  const f=k.dataset.f;
+  k.addEventListener('pointerdown',e=>{e.preventDefault();kd(f);});
+  ['pointerup','pointerleave','pointercancel'].forEach(ev=>k.addEventListener(ev,()=>ku(f)));
+  k.addEventListener('keydown',e=>{if((e.key===' '||e.key==='Enter')&&!e.repeat){e.preventDefault();e.stopPropagation();kd(f);}});
+  k.addEventListener('keyup',e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();e.stopPropagation();ku(f);}});
+});
+$('typed').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){e.preventDefault();sendCall();}
+  else if(e.key==='Escape'){clearPending();e.target.blur();$('heard').textContent='Discarded.';}
+});
+$('typed').addEventListener('input',()=>{if(!S.pending&&$('typed').value)$('sendBtn').classList.add('show');if(!$('typed').value&&!S.pending)$('sendBtn').classList.remove('show');});
+$('sendBtn').addEventListener('click',sendCall);
+$('reviewBtn').addEventListener('click',()=>{S.review=!S.review;$('reviewBtn').setAttribute('aria-pressed',String(S.review));
+  $('heard').textContent=S.review?'Review on — check each transcript, Enter to send.':'Review off — calls send as soon as you release the key.';});
+$('dictOk').addEventListener('click',()=>{$('dictCard').classList.remove('show');$('typed').focus();});
+$('micBtn').addEventListener('click',()=>requestMic());
+$('dictRetry').addEventListener('click',()=>requestMic());
+document.addEventListener('keydown',e=>{
+  const typing=document.activeElement&&['INPUT','TEXTAREA'].includes(document.activeElement.tagName);
+  if(e.code==='Backquote'&&!typing){DEBUG=!DEBUG;addLog('',`Debug ${DEBUG?'on':'off'}`,'sys');return;}
+  if(e.code==='Space'&&!e.repeat&&!typing&&document.activeElement.tagName!=='BUTTON'){e.preventDefault();kd('tac');}
+  if(e.code==='Escape'){hidePrompt();if(S.pending&&!typing){clearPending();$('heard').textContent='Discarded.';}}
+  if(e.key==='Enter'&&!typing&&S.pending&&document.activeElement.tagName!=='BUTTON'){e.preventDefault();sendCall();}
+});
+document.addEventListener('keyup',e=>{
+  const typing=document.activeElement&&['INPUT','TEXTAREA'].includes(document.activeElement.tagName);
+  if(e.code==='Space'&&!typing&&document.activeElement.tagName!=='BUTTON'){e.preventDefault();ku('tac');}
+});
+boot();
+</script>
+</body>
+</html>
